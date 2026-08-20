@@ -1,0 +1,19 @@
+# ⚠️ APARCADO — ver docs/apendice-a-cloudflare.md
+# Config de partida usada durante la investigación del bug de Cloudflare
+# Workers AI en conversaciones multi-turno con tool-calling.
+# Se deja aquí tal cual para quien quiera retomar la investigación,
+# no para uso en producción del stack actual (que usa Kimi/Moonshot nativo).
+
+model_list:
+  - model_name: qwen-workers
+    litellm_params:
+      model: cloudflare/@cf/qwen/qwen3-30b-a3b-fp8
+      api_key: os.environ/CLOUDFLARE_API_KEY
+      fake_stream: true
+
+litellm_settings:
+  drop_params: true
+
+general_settings:
+  master_key: os.environ/LITELLM_MASTER_KEY
+  allow_requests_on_db_unavailable: true

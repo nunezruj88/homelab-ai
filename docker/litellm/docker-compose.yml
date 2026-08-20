@@ -1,0 +1,25 @@
+# ⚠️ APARCADO — ver docs/apendice-a-cloudflare.md
+# No forma parte del stack en producción (que usa Kimi/Moonshot nativo en
+# OpenClaw, sin LiteLLM). Se deja listo para quien retome la investigación
+# del bug de Cloudflare Workers AI.
+
+services:
+  litellm:
+    image: ghcr.io/berriai/litellm:main-latest
+    container_name: litellm
+    restart: unless-stopped
+    ports:
+      - "4000:4000"
+    environment:
+      - CLOUDFLARE_API_KEY=${CLOUDFLARE_API_KEY}
+      - CLOUDFLARE_ACCOUNT_ID=${CLOUDFLARE_ACCOUNT_ID}
+      - LITELLM_MASTER_KEY=${LITELLM_MASTER_KEY}
+    volumes:
+      - ./config.yaml:/app/config.yaml
+    command: ["--config", "/app/config.yaml", "--port", "4000"]
+    networks:
+      - ia-net
+
+networks:
+  ia-net:
+    external: true
