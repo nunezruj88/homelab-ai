@@ -1,0 +1,39 @@
+name: validate
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+jobs:
+  configuration:
+    runs-on: ubuntu-latest
+    env:
+      OPENCLAW_GATEWAY_TOKEN: test-gateway-token
+      PROXMOX_HOST: 192.0.2.10
+      PROXMOX_TOKEN_VALUE: test-proxmox-token
+      GRAFANA_URL: http://grafana.example.test:3000
+      GRAFANA_SERVICE_ACCOUNT_TOKEN: test-grafana-token
+      GRAFANA_MCP_SERVER_TOKEN: test-mcp-token
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Validate shell syntax
+        run: |
+          for script in scripts/*.sh; do
+            bash -n "$script"
+          done
+
+      - name: Run ShellCheck
+        run: shellcheck scripts/*.sh
+
+      - name: Validate Compose files
+        run: |
+          docker compose -f docker/openclaw/docker-compose.yml config --quiet
+          docker compose -f docker/mcp/docker-compose.yml config --quiet
+          docker compose -f docker/portainer/docker-compose.yml config --quiet
+          docker compose -f docker/litellm/docker-compose.yml config --quiet

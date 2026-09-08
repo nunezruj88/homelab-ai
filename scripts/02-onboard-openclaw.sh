@@ -3,9 +3,18 @@
 # Completa el onboarding de OpenClaw, que no se hace solo la primera vez.
 set -euo pipefail
 
+REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+RUNTIME_ENV="${RUNTIME_ENV:-${REPO_ROOT}/config/secrets/runtime.env}"
+
+if [ -f "$RUNTIME_ENV" ]; then
+  set -a
+  # shellcheck disable=SC1090
+  source "$RUNTIME_ENV"
+  set +a
+fi
+
 if [ -z "${OPENCLAW_GATEWAY_TOKEN:-}" ]; then
-  echo "Exporta OPENCLAW_GATEWAY_TOKEN antes de ejecutar este script, o pásalo como argumento:"
-  echo "  OPENCLAW_GATEWAY_TOKEN=xxxx ./02-onboard-openclaw.sh"
+  echo "Configura OPENCLAW_GATEWAY_TOKEN en $RUNTIME_ENV"
   exit 1
 fi
 
@@ -19,20 +28,22 @@ echo ">> Usando volumen: $VOLUME"
 echo ">> Parando el contenedor (puede estar en bucle de reinicio, es normal)..."
 docker stop openclaw || true
 
+OPENCLAW_IMAGE="$(docker inspect openclaw --format '{{.Config.Image}}')"
+
 echo ">> Ejecutando onboarding interactivo..."
 docker run --rm -it \
   -v "${VOLUME}:/home/node/.openclaw" \
   --network ia-net \
   -e "OPENCLAW_GATEWAY_TOKEN=${OPENCLAW_GATEWAY_TOKEN}" \
   --entrypoint node \
-  openclaw-custom:latest \
+  "$OPENCLAW_IMAGE" \
   dist/index.js onboard --mode local --no-install-daemon
 
 echo ">> Fijando modo y bind explícitamente..."
 docker run --rm \
   -v "${VOLUME}:/home/node/.openclaw" \
   --entrypoint node \
-  openclaw-custom:latest \
+  "$OPENCLAW_IMAGE" \
   dist/index.js config set --batch-json '[{"path":"gateway.mode","value":"local"},{"path":"gateway.bind","value":"lan"}]'
 
 echo ">> Arrancando el servicio..."
