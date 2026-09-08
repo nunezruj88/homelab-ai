@@ -109,7 +109,7 @@ pveum user add mcp@pve
 pveum acl modify / --users mcp@pve --roles PVEAuditor
 pveum user token add mcp@pve mcp --privsep 1
 pveum acl modify / --tokens 'mcp@pve!mcp' --roles PVEAuditor
-pveum user permissions mcp@pve --token mcp
+pveum user token permissions mcp@pve mcp
 ```
 
 Copia el secret generado a `PROXMOX_TOKEN_VALUE`.
