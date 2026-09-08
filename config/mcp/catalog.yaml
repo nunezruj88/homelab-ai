@@ -1,0 +1,21 @@
+# Catálogo auditable. La configuración efectiva se instala con scripts/03-registrar-mcps.sh.
+servers:
+  proxmox:
+    transport: streamable-http
+    url: http://proxmox-mcp:8000/mcp
+    risk: read
+    authentication: network-boundary
+    health: http://proxmox-mcp:8000/readyz
+    policy:
+      approval: auto
+      writes: forbidden
+
+  grafana:
+    transport: streamable-http
+    url: http://grafana-mcp:8000/mcp
+    risk: read
+    authentication: bearer-env
+    health: http://grafana-mcp:8000/healthz
+    policy:
+      approval: auto
+      writes: forbidden

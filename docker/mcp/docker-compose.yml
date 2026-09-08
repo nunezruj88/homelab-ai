@@ -1,0 +1,68 @@
+services:
+  proxmox-mcp:
+    image: ghcr.io/akmalovaa/proxmox-mcp:2.3.0
+    container_name: proxmox-mcp
+    restart: unless-stopped
+    environment:
+      PROXMOX_HOST: ${PROXMOX_HOST:?Configura PROXMOX_HOST}
+      PROXMOX_PORT: ${PROXMOX_PORT:-8006}
+      PROXMOX_USER: ${PROXMOX_USER:-mcp@pve}
+      PROXMOX_TOKEN_NAME: ${PROXMOX_TOKEN_NAME:-mcp}
+      PROXMOX_TOKEN_VALUE: ${PROXMOX_TOKEN_VALUE:?Configura PROXMOX_TOKEN_VALUE}
+      PROXMOX_VERIFY_SSL: ${PROXMOX_VERIFY_SSL:-true}
+      PROXMOX_RISK_LEVEL: read
+      PROXMOX_REDACT_SECRETS: "true"
+      PROXMOX_MCP_TRANSPORT: streamable-http
+      PROXMOX_MCP_HOST: 0.0.0.0
+      PROXMOX_MCP_PORT: "8000"
+      PROXMOX_MCP_ALLOWED_HOSTS: proxmox-mcp:8000,localhost:*,127.0.0.1:*
+    expose:
+      - "8000"
+    read_only: true
+    tmpfs:
+      - /tmp
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/readyz', timeout=3)"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    networks:
+      - mcp-net
+
+  grafana-mcp:
+    image: grafana/mcp-grafana:1.3.0
+    container_name: grafana-mcp
+    restart: unless-stopped
+    environment:
+      GRAFANA_URL: ${GRAFANA_URL:?Configura GRAFANA_URL}
+      GRAFANA_SERVICE_ACCOUNT_TOKEN: ${GRAFANA_SERVICE_ACCOUNT_TOKEN:?Configura GRAFANA_SERVICE_ACCOUNT_TOKEN}
+      MCP_GRAFANA_SERVER_TOKEN: ${GRAFANA_MCP_SERVER_TOKEN:?Configura GRAFANA_MCP_SERVER_TOKEN}
+    command:
+      - -t
+      - streamable-http
+      - --address
+      - 0.0.0.0:8000
+      - --disable-write
+      - --metrics
+      - --slow-request-threshold
+      - 500ms
+    expose:
+      - "8000"
+    read_only: true
+    tmpfs:
+      - /tmp
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    networks:
+      - mcp-net
+
+networks:
+  mcp-net:
+    external: true

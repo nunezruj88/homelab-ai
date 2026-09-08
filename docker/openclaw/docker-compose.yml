@@ -1,28 +1,40 @@
 services:
   openclaw:
-    image: openclaw-custom:latest
+    image: ${OPENCLAW_IMAGE:-ghcr.io/openclaw/openclaw:2026.9.2}
     container_name: openclaw
     restart: unless-stopped
     environment:
-      - OPENCLAW_GATEWAY_TOKEN=${OPENCLAW_GATEWAY_TOKEN}
-      - OPENCLAW_GATEWAY_BIND=lan
+      HOME: /home/node
+      OPENCLAW_HOME: /home/node
+      OPENCLAW_GATEWAY_TOKEN: ${OPENCLAW_GATEWAY_TOKEN:?Configura OPENCLAW_GATEWAY_TOKEN}
+      OPENCLAW_GATEWAY_BIND: lan
+      # El valor se usa por referencia en la configuración de Grafana MCP.
+      # No se escribe el secreto literal en openclaw.json.
+      GRAFANA_MCP_SERVER_TOKEN: ${GRAFANA_MCP_SERVER_TOKEN:-}
     ports:
-      - "18789:18789"
+      - "${OPENCLAW_GATEWAY_HOST:-127.0.0.1}:${OPENCLAW_GATEWAY_PORT:-18789}:18789"
     volumes:
       - openclaw-config:/home/node/.openclaw
-      # Necesario para que OpenClaw pueda lanzar el MCP de Proxmox (stdio-only)
-      # como subproceso Docker. Esto equivale a acceso root sobre el host —
-      # asumible en un homelab personal, pero ten en cuenta la implicación.
-      - /var/run/docker.sock:/var/run/docker.sock
-    group_add:
-      # GID del grupo propietario de /var/run/docker.sock en el HOST.
-      # Comprueba el tuyo con: ls -la /var/run/docker.sock
-      - "991"
+    init: true
+    cap_drop:
+      - NET_ADMIN
+      - NET_RAW
+    security_opt:
+      - no-new-privileges:true
+    healthcheck:
+      test: ["CMD", "node", "dist/docker-healthcheck.js"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
     networks:
       - ia-net
+      - mcp-net
 
 networks:
   ia-net:
+    external: true
+  mcp-net:
     external: true
 
 volumes:

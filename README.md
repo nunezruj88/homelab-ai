@@ -1,222 +1,245 @@
 # Homelab IA
 
-Stack de IA agentic autoalojado sobre Proxmox: **OpenClaw (orquestador con MCP) → Kimi (Moonshot AI) → Proxmox MCP + Home Assistant MCP + Node-RED MCP**
+Stack de IA agentic autoalojado sobre Proxmox. OpenClaw usa Kimi/Moonshot como
+modelo y consume Proxmox, Grafana, Home Assistant y Node-RED mediante MCP.
 
-```
-        OpenClaw (orquestador)
-         /              \
-   Moonshot/Kimi      MCP Client
-   (modelo)              /    |    \
-                  Proxmox  Home    Node-RED
-                    MCP  Assistant   MCP
-                          MCP
+```text
+                         ┌─ Proxmox MCP (solo lectura) ── Proxmox API
+OpenClaw ── MCP HTTP ────┼─ Grafana MCP (solo lectura) ── Grafana API
+                         ├─ Home Assistant MCP
+                         └─ Node-RED MCP
 ```
 
-> ℹ️ Cloudflare Workers AI + LiteLLM se probaron primero pero se aparcaron por un bug confirmado del lado de Cloudflare en tool-calling multi-turno. Ver [`docs/apendice-a-cloudflare.md`](docs/apendice-a-cloudflare.md). El stack final usa Kimi de forma nativa en OpenClaw, sin LiteLLM — más simple, sin ese bug, y con function calling fiable.
+OpenClaw no tiene acceso al socket Docker. Proxmox MCP funciona como servicio
+independiente con transporte Streamable HTTP, herramientas `read` y un token
+`PVEAuditor`. Consulta [el diseño del plano de control](docs/arquitectura-mcp.md).
 
-## Estructura del repo
+> Cloudflare Workers AI + LiteLLM se probaron y se aparcaron por un problema de
+> tool-calling multi-turno. El stack activo usa Moonshot de forma nativa. Consulta
+> [el apéndice de Cloudflare](docs/apendice-a-cloudflare.md).
 
-```
-homelab-ia/
-├── README.md                        # esta guía
+## Estructura
+
+```text
+homelab-ai/
+├── config/
+│   ├── mcp/catalog.yaml             # inventario y política de los MCP
+│   └── secrets/runtime.env.example  # plantilla única; runtime.env no se versiona
 ├── docker/
-│   ├── openclaw/
-│   │   ├── Dockerfile               # imagen OpenClaw + cliente Docker
-│   │   ├── docker-compose.yml
-│   │   └── .env.example
-│   ├── litellm/                     # aparcado — ver docs/apendice-a-cloudflare.md
-│   │   ├── config.yaml
-│   │   ├── docker-compose.yml
-│   │   └── .env.example
+│   ├── mcp/docker-compose.yml       # Proxmox MCP + Grafana MCP
+│   ├── openclaw/docker-compose.yml
+│   ├── litellm/                     # investigación aparcada
 │   └── portainer/
-│       └── docker-compose.yml
 ├── scripts/
-│   ├── 01-crear-lxc.sh              # ejecutar en el HOST Proxmox
-│   ├── 02-onboard-openclaw.sh       # ejecutar dentro del LXC
-│   └── 03-registrar-mcp-proxmox.sh  # ejecutar dentro del LXC
+│   ├── 01-crear-lxc.sh
+│   ├── 02-onboard-openclaw.sh
+│   ├── 03-registrar-mcps.sh
+│   └── 04-crear-automatizaciones.sh
 └── docs/
-    ├── apendice-a-cloudflare.md     # bug de Cloudflare Workers AI documentado
-    └── apendice-b-nodered.md        # notas sobre node-red-contrib-mcp-server
 ```
 
 ## 0. Prerrequisitos
 
-- [ ] Proxmox VE instalado y accesible (`https://<ip-proxmox>:8006`)
-- [ ] Cuenta en [platform.moonshot.ai](https://platform.moonshot.ai) con API key generada
-- [ ] IP fija reservada para el LXC (esta guía usa `10.8.1.101`)
-- [ ] (Opcional) Node-RED ya desplegado en otro LXC/host
-- [ ] (Opcional) Dominio propio + nginx si vas a exponer el gateway hacia fuera
+- Proxmox VE accesible por HTTPS.
+- Docker Engine y Docker Compose plugin dentro del LXC.
+- Cuenta Moonshot y API key.
+- Grafana 9 o posterior con una service account `Viewer`.
+- Certificado de confianza en la API Proxmox. Para un laboratorio sin PKI se
+  puede usar temporalmente `PROXMOX_VERIFY_SSL=false`.
+- Home Assistant y Node-RED son opcionales.
 
-Cada paso se despliega y se verifica **antes** de pasar al siguiente.
+Cada bloque debe desplegarse y verificarse antes de continuar.
 
 ## 1. Crear el LXC
 
-En el **host Proxmox**:
+Revisa las variables al principio del script y ejecútalo en el host Proxmox:
 
 ```bash
 scripts/01-crear-lxc.sh
 ```
 
-Revisa las variables al principio del script (`IP`, `GW`, `CORES`, `MEMORY`) antes de ejecutarlo.
+Dentro del LXC:
 
-**✅ Verificación** (ya dentro del LXC, `pct enter 200`):
 ```bash
 ip a show eth0
 ping -c 3 10.8.1.1
 ```
 
-## 2. Instalar Docker (dentro del LXC)
+## 2. Instalar Docker
+
+Dentro del LXC:
 
 ```bash
 curl -fsSL https://get.docker.com | sh
 apt install -y docker-compose-plugin
+docker --version
+docker compose version
+systemctl is-active docker
 ```
 
-**✅ Verificación:**
+## 3. Preparar redes y secretos
+
+Desde la raíz del repositorio:
+
 ```bash
-docker --version && docker compose version && systemctl is-active docker
+docker network inspect ia-net >/dev/null 2>&1 || docker network create ia-net
+docker network inspect mcp-net >/dev/null 2>&1 || docker network create mcp-net
+
+cp config/secrets/runtime.env.example config/secrets/runtime.env
+nano config/secrets/runtime.env
 ```
 
-## 3. Desplegar Portainer
+Genera tokens distintos:
 
 ```bash
-cd docker/portainer
-docker compose up -d
-docker logs portainer 2>&1 | grep -i token   # token de setup, caduca en 5 min
+openssl rand -hex 32  # OPENCLAW_GATEWAY_TOKEN
+openssl rand -hex 32  # GRAFANA_MCP_SERVER_TOKEN
 ```
 
-Accede a `https://10.8.1.101:9443` y crea el usuario admin.
+`runtime.env` está ignorado por Git. No lo copies a incidencias, logs o capturas.
 
-## 4. Red Docker compartida
+## 4. Crear credenciales de solo lectura
+
+### Proxmox
+
+Usa un usuario y token dedicados, con separación de privilegios:
 
 ```bash
-docker network create ia-net
+pveum user add mcp@pve
+pveum acl modify / --users mcp@pve --roles PVEAuditor
+pveum user token add mcp@pve mcp --privsep 1
+pveum acl modify / --tokens 'mcp@pve!mcp' --roles PVEAuditor
+pveum user permissions mcp@pve --token mcp
 ```
 
-Todos los `docker-compose.yml` de este repo ya referencian `ia-net` como red externa.
+Copia el secret generado a `PROXMOX_TOKEN_VALUE`.
 
-## 5. Construir la imagen de OpenClaw
+### Grafana
 
-Necesaria porque OpenClaw lanza el MCP de Proxmox como subproceso Docker — la imagen oficial no trae el cliente `docker`.
+Crea una service account con rol `Viewer` y guarda su token en
+`GRAFANA_SERVICE_ACCOUNT_TOKEN`. `GRAFANA_MCP_SERVER_TOKEN` es un segundo token
+aleatorio que autentica a OpenClaw frente al propio servidor MCP.
+
+## 5. Desplegar los MCP
 
 ```bash
-cd docker/openclaw
-docker build -t openclaw-custom:latest .
+docker compose --env-file config/secrets/runtime.env \
+  -f docker/mcp/docker-compose.yml config --quiet
+docker compose --env-file config/secrets/runtime.env \
+  -f docker/mcp/docker-compose.yml up -d
 ```
 
-**✅ Verificación:**
-```bash
-docker run --rm --entrypoint sh openclaw-custom:latest -c "docker --version"
-```
+Los servicios solo usan `mcp-net`; sus puertos no se publican en el host.
 
-## 6. Desplegar OpenClaw
+## 6. Desplegar y configurar OpenClaw
 
 ```bash
-cd docker/openclaw
-cp .env.example .env
-nano .env   # rellena OPENCLAW_GATEWAY_TOKEN (openssl rand -hex 32) y el GID real del docker.sock
-docker compose up -d
-```
+docker compose --env-file config/secrets/runtime.env \
+  -f docker/openclaw/docker-compose.yml config --quiet
+docker compose --env-file config/secrets/runtime.env \
+  -f docker/openclaw/docker-compose.yml up -d
 
-⚠️ El `group_add` del compose usa el GID `991` por defecto — comprueba el tuyo con `ls -la /var/run/docker.sock` y ajústalo en `docker-compose.yml` si difiere.
-
-Es normal que arranque en bucle de reinicio (`Missing config`) — falta el onboarding:
-
-```bash
 scripts/02-onboard-openclaw.sh
 ```
 
-**✅ Verificación:**
+El gateway se publica en `127.0.0.1:18789` por defecto. Si debe ser accesible
+desde la LAN, configura `OPENCLAW_GATEWAY_HOST` con la IP concreta del LXC y
+protege el acceso con firewall o proxy. No publiques directamente los MCP.
+
+Verificación:
+
 ```bash
-curl -fsS http://localhost:18789/healthz   # {"ok":true,"status":"live"}
-curl -fsS http://localhost:18789/readyz    # {"ready":true}
-docker exec -it openclaw sh -c "docker ps" # debe listar contenedores del host
+curl -fsS http://127.0.0.1:18789/healthz
+curl -fsS http://127.0.0.1:18789/readyz
 ```
 
-## 7. Configurar el modelo (Kimi / Moonshot)
+## 7. Configurar el modelo
 
 ```bash
 docker exec -it openclaw openclaw configure
+docker exec openclaw openclaw models set moonshot/kimi-k2.6
+docker exec openclaw openclaw models status
 ```
-Elige **Gateway: Local**, proveedor **Moonshot**, y pega tu API key (confirma si es una "Moonshot API key" estándar y no una "Kimi Code API key" — son proveedores distintos).
+
+La arquitectura MCP no depende del proveedor. El modelo se puede sustituir sin
+cambiar los servidores ni sus credenciales.
+
+## 8. Registrar y verificar MCP
 
 ```bash
-docker exec -it openclaw sh -c "openclaw models set moonshot/kimi-k2.6"
-docker exec -it openclaw sh -c "openclaw models status"   # debe mostrar api_key=1 en moonshot
+scripts/03-registrar-mcps.sh
 ```
 
-## 8. MCP de Proxmox
+El script comprueba salud, registra las URLs internas y ejecuta `mcp doctor
+--probe`. La cabecera de Grafana se guarda como referencia a una variable de
+entorno, no como token literal.
 
-Crea un token API de solo lectura en Proxmox (**Datacenter → Permissions**: usuario `mcp@pve`, token `mcp`, rol `PVEAuditor`), y:
+## 9. Instalar la automatización inicial
 
 ```bash
-scripts/03-registrar-mcp-proxmox.sh <ip-nodo-proxmox> <secret-del-token>
+scripts/04-crear-automatizaciones.sh
 ```
 
-**✅ Verificación:**
-```bash
-docker exec -it openclaw sh -c "openclaw mcp doctor proxmox --probe"   # ok: true
-```
+Crea `homelab-health-daily` a las 08:00 de `AUTOMATION_TZ`. Se ejecuta en una
+sesión aislada mediante el agente `homelab-observer`. Su allowlist contiene
+únicamente `proxmox__*`, `grafana__*` y `session_status`: no dispone de shell,
+filesystem, navegador, mensajería ni otros MCP. No entrega resultados fuera de
+OpenClaw hasta que se configure un destino explícito.
 
-## 9. MCP de Home Assistant
-
-Si usas **HA-MCP** (community), coge la URL de "direct access" (no la de Nabu Casa si todo está en red local):
-
-```bash
-docker exec -it openclaw sh -c '
-openclaw mcp add homeassistant \
-  --url=http://<ip-home-assistant>:9584/private_XXXXXXXXXXXXXXXXX \
-  --transport=streamable-http
-'
-docker exec -it openclaw sh -c "openclaw mcp doctor homeassistant --probe"
-```
-
-## 10. MCP de Node-RED
-
-Ver [`docs/apendice-b-nodered.md`](docs/apendice-b-nodered.md) para la instalación del paquete y las trampas conocidas (nodo correcto a usar, endpoints reales). Resumen:
+Prueba y revisa el resultado antes de activar entrega:
 
 ```bash
-docker exec -it openclaw sh -c '
-openclaw mcp add nodered \
-  --url=http://<ip-nodered>:8001/mcp \
-  --transport=streamable-http
-'
-docker exec -it openclaw sh -c "openclaw mcp doctor nodered --probe"
+docker exec openclaw openclaw automations list --all
+docker exec openclaw openclaw automations run <job-id> --wait
 ```
 
-## 11. Prueba end-to-end
+## 10. Home Assistant y Node-RED
+
+Los MCP remotos mantienen el mismo patrón:
 
 ```bash
-docker exec -it openclaw openclaw tui
+docker exec openclaw openclaw mcp add homeassistant \
+  --url http://IP_HOME_ASSISTANT:9584/private_TOKEN \
+  --transport streamable-http
+
+docker exec openclaw openclaw mcp add nodered \
+  --url http://IP_NODE_RED:8001/mcp \
+  --transport streamable-http
 ```
+
+Verifica siempre con `openclaw mcp doctor NOMBRE --probe`. Para Node-RED,
+consulta [las notas específicas](docs/apendice-b-nodered.md).
+
+## 11. Portainer opcional
+
+Portainer también monta el socket Docker y, por tanto, conserva privilegios
+administrativos sobre el host. Despliega solo si lo necesitas y limita su acceso:
+
+```bash
+docker compose -f docker/portainer/docker-compose.yml up -d
 ```
-/new
-Lista los nodos de mi cluster Proxmox
-Dime el estado de alguna entidad de mi Home Assistant
-Usa la herramienta de Node-RED
-```
 
-También accesible en `http://10.8.1.101:18789` (pide el `OPENCLAW_GATEWAY_TOKEN`).
+## Checklist
 
-## 12. (Opcional) Exponer con dominio propio
-
-Con nginx + certbot, reverse proxy de un subdominio hacia `10.8.1.101:18789`. No expongas el puerto directo a internet.
-
-## Checklist resumen
-
-- [ ] LXC con IP fija, Docker y Portainer operativos
-- [ ] Red `ia-net` creada
-- [ ] Imagen `openclaw-custom` construida
-- [ ] OpenClaw Gateway arriba, sin bucle de reinicio
-- [ ] Modelo Moonshot/Kimi configurado con auth resuelta
-- [ ] MCP Proxmox, Home Assistant y Node-RED registrados y verificados
-- [ ] Prueba end-to-end con las tres herramientas respondiendo datos reales
+- [ ] LXC, Docker, `ia-net` y `mcp-net` operativos.
+- [ ] Secretos reales únicamente en `config/secrets/runtime.env`.
+- [ ] Token Proxmox dedicado, `privsep=1` y `PVEAuditor` efectivo.
+- [ ] Service account Grafana con rol `Viewer`.
+- [ ] Proxmox MCP anuncia `risk=read`.
+- [ ] Grafana MCP funciona con `--disable-write`.
+- [ ] OpenClaw no tiene montado `/var/run/docker.sock`.
+- [ ] Ambos `mcp doctor --probe` terminan correctamente.
+- [ ] Automatización diaria probada manualmente antes de configurar entrega.
 
 ## Seguridad
 
-- No subas nunca `.env` con secretos reales a este repo — usa `.env.example` como plantilla (ya cubierto por `.gitignore`).
-- El MCP de Proxmox corre con el socket de Docker montado en OpenClaw (necesario para spawnear el contenedor stdio) — equivale a acceso root sobre el host. Asumible en homelab personal, revisar si se expone más allá de la red local.
-- Rota cualquier token/API key que hayas pegado alguna vez en una terminal compartida o capturas de pantalla.
+- Los límites se aplican en el servidor MCP y en las credenciales, no solo en el
+  prompt del agente.
+- No conectes contenedores no confiables a `mcp-net`.
+- No subas `runtime.env`, tokens, backups de OpenClaw ni salidas sin redactar.
+- No eleves `PROXMOX_RISK_LEVEL`. Las acciones `lifecycle` o destructivas se
+  incorporarán en un servicio independiente con aprobación externa.
+- Trata el volumen `openclaw-config` como material sensible.
 
 ## Licencia
 

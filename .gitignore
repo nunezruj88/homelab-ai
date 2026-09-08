@@ -1,6 +1,7 @@
 # Secretos reales — nunca subir, usar los .env.example como plantilla
 .env
 docker/**/.env
+config/secrets/*.env
 
 # Backups de config de OpenClaw
 *.bak
