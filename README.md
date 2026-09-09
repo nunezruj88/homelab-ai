@@ -153,6 +153,58 @@ curl -fsS http://127.0.0.1:18789/healthz
 curl -fsS http://127.0.0.1:18789/readyz
 ```
 
+### Acceso web desde la LAN y aprobación del navegador
+
+En `config/secrets/runtime.env`, establece `OPENCLAW_GATEWAY_HOST` con la IP
+del LXC. En el homelab probado:
+
+```dotenv
+OPENCLAW_GATEWAY_HOST=10.8.1.101
+```
+
+Desde la raíz del repositorio, elimina cualquier valor de esa variable exportado
+en la terminal que pueda sobrescribir el archivo y recrea el contenedor:
+
+```bash
+unset OPENCLAW_GATEWAY_HOST
+docker compose --env-file config/secrets/runtime.env \
+  -f docker/openclaw/docker-compose.yml up -d --force-recreate openclaw
+docker port openclaw 18789
+```
+
+La salida debe mostrar `10.8.1.101:18789` (o la IP que hayas configurado).
+Comprueba la salud usando esa misma IP y abre la interfaz:
+
+```bash
+curl -fsS http://10.8.1.101:18789/healthz
+```
+
+Abre [OpenClaw en el homelab](http://10.8.1.101:18789/). Sustituye la IP si tu
+LXC usa otra dirección. Para obtener el token de acceso, ejecuta en el LXC:
+
+```bash
+docker exec -it openclaw openclaw gateway auth-token --show
+```
+
+Introduce ese token en la interfaz web. Este comando muestra un secreto:
+úsalo solo para iniciar sesión y no publiques su salida.
+
+Si el navegador solicita aprobación del dispositivo, lista las solicitudes:
+
+```bash
+docker exec -it openclaw openclaw devices list
+```
+
+Identifica la solicitud pendiente de tu navegador y aprueba su ID:
+
+```bash
+docker exec -it openclaw openclaw devices approve <ID_DE_SOLICITUD>
+```
+
+Sustituye `<ID_DE_SOLICITUD>` por el ID mostrado en tu solicitud actual; no es
+un valor fijo. Vuelve al navegador y reconecta o recarga la página. Un navegador
+o perfil nuevo puede requerir otra aprobación.
+
 ## 7. Configurar el modelo
 
 ```bash
