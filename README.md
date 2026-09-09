@@ -438,6 +438,14 @@ apareció aunque el archivo guardaba la referencia a
 No sustituir esa referencia por el token literal ni publicar el archivo completo.
 El aviso por sí solo no demuestra que el secreto se haya escrito en la configuración.
 
+## Experimento Cloudflare Workers AI
+
+Las pruebas directas con Qwen funcionan con contenido de texto, pero el agente
+OpenClaw aún encuentra un rechazo HTTP 400 al continuar con herramientas.
+Se ha añadido un [adaptador experimental y su guía de prueba](docs/cloudflare-adapter.md)
+para normalizar exclusivamente los mensajes assistant con content nulo y tool_calls.
+Moonshot sigue siendo el proveedor principal; el adaptador se despliega por separado.
+
 ## Licencia
 
 Uso personal / homelab. Adapta libremente.

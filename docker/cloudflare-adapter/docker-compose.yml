@@ -1,0 +1,28 @@
+services:
+  cloudflare-adapter:
+    build: .
+    image: homelab-cloudflare-adapter:experimental-1
+    container_name: cloudflare-adapter
+    restart: unless-stopped
+    environment:
+      CLOUDFLARE_ACCOUNT_ID: ${CLOUDFLARE_ACCOUNT_ID:?Configura CLOUDFLARE_ACCOUNT_ID}
+    expose:
+      - "8080"
+    read_only: true
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    init: true
+    mem_limit: 256m
+    pids_limit: 64
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:8080/healthz').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+    networks:
+      - mcp-net
+networks:
+  mcp-net:
+    external: true
