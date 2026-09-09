@@ -267,20 +267,48 @@ docker exec openclaw openclaw automations run <job-id> --wait
 
 ## 10. Home Assistant y Node-RED
 
-Los MCP remotos mantienen el mismo patrón:
+### HA-MCP comunitario
+
+Usa la URL de conexión completa que muestra HA-MCP, no un token de acceso de
+Home Assistant añadido a la URL del puerto 8123.
+
+- App/add-on: consulta sus registros y copia la URL de acceso directo
+  (`MCP Server URL`). El puerto habitual es 9583.
+- Componente personalizado: consulta la pantalla Configurar del servidor HA-MCP.
+  El puerto habitual es 9584.
+- Respeta el puerto y la ruta `/private_...` de tu instalación. La URL es una
+  credencial; no la publiques.
+
+En el siguiente comando sustituye `URL_DIRECTA_DE_HA_MCP` por esa URL.
+`mcp set` reemplaza la entrada existente si se registró una dirección incorrecta:
 
 ```bash
-docker exec openclaw openclaw mcp add homeassistant \
-  --url http://IP_HOME_ASSISTANT:9584/private_TOKEN \
-  --transport streamable-http
+docker exec openclaw openclaw mcp set homeassistant \
+  '{"url":"URL_DIRECTA_DE_HA_MCP","transport":"streamable-http","enabled":true}'
+docker exec openclaw openclaw mcp doctor homeassistant --probe
+```
 
+No añadas un bearer token al usar la URL secreta estándar de HA-MCP.
+La integración oficial de Home Assistant **Model Context Protocol Server** es
+distinta: usa `/api/mcp` y autenticación en cabecera; no mezcles ambas configuraciones.
+
+Referencias: [HA-MCP add-on](https://github.com/homeassistant-ai/ha-mcp/blob/master/homeassistant-addon/DOCS.md)
+y [componente personalizado](https://github.com/homeassistant-ai/ha-mcp/blob/master/docs/in-process-server.md).
+
+HA-MCP puede ofrecer herramientas de control y escritura. Registrar el servidor
+no lo convierte en solo lectura. El agente `homelab-observer` conserva su lista
+limitada a Proxmox, Grafana y `session_status`.
+
+### Node-RED
+
+```bash
 docker exec openclaw openclaw mcp add nodered \
   --url http://IP_NODE_RED:8001/mcp \
   --transport streamable-http
+docker exec openclaw openclaw mcp doctor nodered --probe
 ```
 
-Verifica siempre con `openclaw mcp doctor NOMBRE --probe`. Para Node-RED,
-consulta [las notas específicas](docs/apendice-b-nodered.md).
+Consulta [las notas específicas](docs/apendice-b-nodered.md).
 
 ## 11. Portainer opcional
 
