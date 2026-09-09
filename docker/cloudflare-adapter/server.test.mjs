@@ -1,7 +1,52 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import http from 'node:http';
-import { createServer, normalize } from './server.mjs';
+import { createServer, normalize, normalizeStream } from './server.mjs';
+import { Readable } from 'node:stream';
+
+async function replay(chunks, options) {
+  const stream = Readable.from(chunks).pipe(normalizeStream(options));
+  let output = '';
+  for await (const chunk of stream) output += chunk.toString();
+  return output;
+}
+
+test('numeric content including zero survives fragmented UTF-8 SSE; metadata stays numeric', async () => {
+  const event = content => 'data: ' + JSON.stringify({ choices: [{ index: 0,
+    delta: { content } }], usage: { completion_tokens: 12 } }) + '\r\n\r\n';
+  const input = ['CPU ', 1, 2, '.', 3, 4, '%, RAM ', 0, '%, nodos ', 4, '. España']
+    .map(event).join('') + 'data: [DONE]\r\n\r\n';
+  const output = await replay(Array.from(Buffer.from(input), b => Buffer.from([b])));
+  const events = output.split('\r\n\r\n').filter(x => x.startsWith('data: {'))
+    .map(x => JSON.parse(x.slice(6)));
+  assert.equal(events.map(x => x.choices[0].delta.content).join(''), 'CPU 12.34%, RAM 0%, nodos 4. España');
+  assert.ok(events.every(x => typeof x.choices[0].delta.content === 'string'));
+  assert.ok(events.every(x => x.choices[0].index === 0 && x.usage.completion_tokens === 12));
+  assert.ok(output.endsWith('data: [DONE]\r\n\r\n'));
+});
+
+test('multiline data retains SSE metadata; tool calls and malformed events pass through', async () => {
+  const input = ': keep\nevent: message\nid: 7\ndata: {"choices":\ndata: [{"delta":{"content":0}}]}\n\n';
+  assert.equal(await replay([input]), ': keep\nevent: message\nid: 7\ndata: {"choices":[{"delta":{"content":"0"}}]}\n\n');
+  const unchanged = 'data: {"choices":[{"delta":{"content":null,"tool_calls":[{"index":0,"function":{"arguments":"123"}}]}}]}\n\ndata: not-json\n\n: final';
+  assert.equal(await replay([unchanged]), unchanged);
+});
+
+test('oversized complete and incomplete SSE events are rejected', async () => {
+  await assert.rejects(replay(['data: ' + 'x'.repeat(100)], { maxEventBytes: 32 }), /too large/);
+  await assert.rejects(replay(['data: ' + 'x'.repeat(100) + '\n\n'], { maxEventBytes: 32 }), /too large/);
+});
+
+test('HTTP streaming normalizes numeric content and logs counts only', async t => {
+  const { url, logs } = await fixture(t, (req, res) => {
+    req.resume();
+    res.writeHead(200, { 'Content-Type': 'text/event-stream; charset=utf-8' });
+    res.end('data: {"choices":[{"delta":{"content":4}}]}\n\ndata: [DONE]\n\n');
+  });
+  const response = await send(url, { model, stream: true });
+  assert.equal(await response.text(), 'data: {"choices":[{"delta":{"content":"4"}}]}\n\ndata: [DONE]\n\n');
+  assert.ok(logs.some(line => JSON.parse(line).normalizedContentChunks === 1));
+});
 
 const model = '@cf/qwen/qwen3-30b-a3b-fp8';
 const token = 'Bearer test-credential-not-real';
@@ -134,3 +179,4 @@ test('health endpoint is local and does not call Cloudflare', async t => {
   const { url } = await fixture(t, () => assert.fail('Unexpected upstream request'));
   assert.deepEqual(await (await fetch(url + '/healthz')).json(), { status: 'ok' });
 });
+

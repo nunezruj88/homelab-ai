@@ -443,7 +443,9 @@ El aviso por sí solo no demuestra que el secreto se haya escrito en la configur
 Las pruebas directas con Qwen funcionan con contenido de texto, pero el agente
 OpenClaw aún encuentra un rechazo HTTP 400 al continuar con herramientas.
 Se ha añadido un [adaptador experimental y su guía de prueba](docs/cloudflare-adapter.md)
-para normalizar exclusivamente los mensajes assistant con content nulo y tool_calls.
+para normalizar mensajes assistant con content nulo y tool_calls, y conservar
+los dígitos que Cloudflare entrega como números en el streaming. La guía incluye
+cómo reconstruir el adaptador y comprobar las cifras tras actualizar.
 Moonshot sigue siendo el proveedor principal; el adaptador se despliega por separado.
 
 ## Licencia
