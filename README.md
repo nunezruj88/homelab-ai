@@ -261,6 +261,52 @@ docker compose -f docker/portainer/docker-compose.yml up -d
   incorporarán en un servicio independiente con aprobación externa.
 - Trata el volumen `openclaw-config` como material sensible.
 
+
+## Memoria y comprobaciones posteriores al despliegue
+
+### Memoria textual sin una API adicional
+
+Configuración comprobada en el homelab: la ruta es `memory.search.provider`,
+no `agents.defaults.memorySearch`. Para buscar por palabras clave sin embeddings
+de OpenAI:
+
+```bash
+docker exec openclaw openclaw config set --batch-json \
+  '[{"path":"memory.search.provider","value":"none"}]'
+docker restart openclaw
+docker exec openclaw openclaw memory status --index --agent main
+docker exec openclaw openclaw memory status --index --agent homelab-observer
+```
+
+Ejecuta el último comando después de crear el agente del punto 9.
+La comprobación satisfactoria muestra todos los archivos indexados, `Dirty: no`
+y `FTS: ready`. Con `provider: none`, `Vector store: disabled` y
+`No embedding provider available (FTS-only mode)` describen el modo elegido:
+no se está usando búsqueda por similitud semántica. No necesitas una clave
+OpenAI para esta configuración.
+
+### Política del observador
+
+```bash
+docker exec openclaw openclaw config get agents.entries.homelab-observer.tools
+```
+
+La lista `allow` debe contener exclusivamente `proxmox__*`, `grafana__*` y
+`session_status`. Esta consulta verifica la configuración del agente;
+`sandbox explain` muestra otra capa y no sustituye esta comprobación.
+El informe manual se ha probado con éxito. La lista no concede herramientas de
+memoria al observador aunque sus archivos estén indexados. Verificar la ejecución
+programada y el catálogo efectivo de una ejecución sigue siendo una comprobación
+separada.
+
+### Aviso de cabecera Grafana
+
+En la instalación probada, el aviso de `mcp doctor` sobre un valor sensible
+apareció aunque el archivo guardaba la referencia a
+`${GRAFANA_MCP_SERVER_TOKEN}` y la variable existía en el contenedor.
+No sustituir esa referencia por el token literal ni publicar el archivo completo.
+El aviso por sí solo no demuestra que el secreto se haya escrito en la configuración.
+
 ## Licencia
 
 Uso personal / homelab. Adapta libremente.
