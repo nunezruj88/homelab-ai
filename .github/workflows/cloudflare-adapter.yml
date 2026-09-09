@@ -1,0 +1,25 @@
+name: cloudflare-adapter
+on:
+  pull_request:
+  push:
+    branches: [main]
+permissions:
+  contents: read
+jobs:
+  adapter:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - name: Test HTTP adapter with synthetic data
+        run: node --test docker/cloudflare-adapter/server.test.mjs
+      - name: Validate Compose
+        env:
+          CLOUDFLARE_ACCOUNT_ID: '00000000000000000000000000000000'
+        run: docker compose -f docker/cloudflare-adapter/docker-compose.yml config --quiet
+      - name: Build image and verify runtime syntax
+        run: |
+          docker build -t cloudflare-adapter:test docker/cloudflare-adapter
+          docker run --rm --network none --read-only --cap-drop ALL cloudflare-adapter:test node --check server.mjs

@@ -1,6 +1,17 @@
 # Apéndice A — Investigación pendiente: Cloudflare Workers AI + LiteLLM
 
-## Estado: aparcado, no resuelto
+## Estado: investigación retomada, integración aún no resuelta
+
+Actualización 2026-09-09: las peticiones directas sin LiteLLM pasan para chat,
+solicitud de herramienta y devolución de resultado con contenido de texto vacío.
+Una prueba con `assistant.content: null` falla con HTTP 400. En OpenClaw 2026.9.3
+persiste el rechazo de la segunda petición incluso con `requiresStringContent`.
+Todavía no hemos inspeccionado el cuerpo exacto de esa petición; los mensajes
+`oneOf` no identifican por sí solos la causa única.
+
+Se propone un [adaptador experimental](cloudflare-adapter.md) que corrige solamente
+ese valor nulo. La evidencia histórica que sigue se conserva como registro, no
+como confirmación de la causa actual ni de un fallo general de Workers AI.
 
 Se intentó usar Cloudflare Workers AI (modelo `qwen3-30b-a3b-fp8`, que sí soporta function calling nativamente según la documentación de Cloudflare) a través de LiteLLM como proxy OpenAI-compatible, como cerebro para OpenClaw.
 
