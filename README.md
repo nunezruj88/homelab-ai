@@ -291,6 +291,57 @@ administrativos sobre el host. Despliega solo si lo necesitas y limita su acceso
 docker compose -f docker/portainer/docker-compose.yml up -d
 ```
 
+## 12. Actualizar OpenClaw en Docker
+
+En esta instalación, actualiza desde la consola del LXC mediante Docker Compose.
+El botón de actualización web no es el procedimiento utilizado para sustituir
+la imagen del contenedor. La actualización de `2026.9.2` a `2026.9.3` se ha
+probado correctamente en el homelab, incluidas las comprobaciones de ambos MCP.
+
+1. Haz una copia de seguridad o snapshot del LXC antes de actualizar.
+2. Edita `config/secrets/runtime.env` y fija la versión deseada. Ejemplo probado:
+
+```dotenv
+OPENCLAW_IMAGE=ghcr.io/openclaw/openclaw:2026.9.3
+```
+
+3. Desde la raíz del repositorio, elimina las variables exportadas que podrían
+sobrescribir el archivo y descarga la imagen:
+
+```bash
+unset OPENCLAW_IMAGE OPENCLAW_GATEWAY_HOST
+
+docker compose --env-file config/secrets/runtime.env \
+  -f docker/openclaw/docker-compose.yml pull openclaw
+```
+
+4. Solo si la descarga termina correctamente, recrea OpenClaw:
+
+```bash
+docker compose --env-file config/secrets/runtime.env \
+  -f docker/openclaw/docker-compose.yml up -d --force-recreate openclaw
+```
+
+5. Comprueba la versión y las conexiones:
+
+```bash
+docker exec openclaw openclaw --version
+docker exec openclaw openclaw mcp doctor proxmox --probe
+docker exec openclaw openclaw mcp doctor grafana --probe
+```
+
+La versión debe coincidir con la elegida y ambos MCP deben indicar `ok`.
+Vuelve a abrir la interfaz web y prueba una consulta. Si falla el arranque,
+consulta `docker logs --tail 100 openclaw`.
+
+El volumen existente conserva configuración, credenciales e historial. No repitas
+el onboarding ni elimines el volumen; no uses `docker compose down -v` para
+actualizar. Este procedimiento recrea únicamente OpenClaw.
+
+Para versiones posteriores, elige explícitamente una versión publicada y revisa
+sus notas antes de repetir el proceso. Si una actualización migra los datos,
+volver a una imagen anterior puede no ser suficiente: conserva la copia previa.
+
 ## Checklist
 
 - [ ] LXC, Docker, `ia-net` y `mcp-net` operativos.
