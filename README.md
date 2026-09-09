@@ -157,9 +157,29 @@ curl -fsS http://127.0.0.1:18789/readyz
 
 ```bash
 docker exec -it openclaw openclaw configure
+docker exec openclaw openclaw config set --batch-json \
+  '[{"path":"models.providers.moonshot.baseUrl","value":"https://api.moonshot.ai/v1"},{"path":"models.providers.moonshot.api","value":"openai-completions"},{"path":"models.providers.moonshot.models","value":[{"id":"kimi-k2.6","name":"Kimi K2.6"}]}]'
+docker exec -it openclaw openclaw models auth paste-api-key --provider moonshot
 docker exec openclaw openclaw models set moonshot/kimi-k2.6
 docker exec openclaw openclaw models status
 ```
+
+Obtén la API key en [Kimi API Platform](https://platform.kimi.ai). El proveedor
+sigue siendo `moonshot` y la URL internacional es `https://api.moonshot.ai/v1`.
+Pega la clave únicamente en el asistente interactivo. El bloque anterior configura
+Kimi K2.6 como única entrada de la lista de modelos Moonshot; si tienes otros modelos
+personalizados, consérvalos al editar esa lista.
+
+Después de configurar el proveedor:
+
+```bash
+docker restart openclaw
+docker exec -it openclaw openclaw tui
+```
+
+Prueba primero un saludo y después consultas de lectura a Proxmox y Grafana.
+Si aparece un aviso de memoria por falta de clave OpenAI, diagnostícalo por
+separado: la clave Moonshot no configura el proveedor de embeddings.
 
 La arquitectura MCP no depende del proveedor. El modelo se puede sustituir sin
 cambiar los servidores ni sus credenciales.
