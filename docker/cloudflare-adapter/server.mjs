@@ -1,6 +1,56 @@
 import http from 'node:http';
 import https from 'node:https';
 import { pathToFileURL } from 'node:url';
+import { Transform, pipeline } from 'node:stream';
+import { StringDecoder } from 'node:string_decoder';
+
+// Buffer one SSE event, not the entire completion. Leave unrelated events intact.
+export function normalizeStream({ maxEventBytes = 1024 * 1024 } = {}) {
+  const decoder = new StringDecoder('utf8');
+  let pending = '';
+  const stream = new Transform({
+    transform(chunk, encoding, callback) {
+      try { consume(decoder.write(chunk)); callback(); } catch (error) { callback(error); }
+    },
+    flush(callback) {
+      try { consume(decoder.end()); if (pending) this.push(convert(pending)); callback(); }
+      catch (error) { callback(error); }
+    },
+  });
+  stream.normalizedChunks = 0;
+  function convert(event) {
+    const lines = event.split(/\r?\n/);
+    const data = lines.filter(line => line.startsWith('data:'))
+      .map(line => line.slice(5).replace(/^ /, '')).join('\n');
+    let value;
+    try { value = JSON.parse(data); } catch { return event; }
+    let changed = 0;
+    if (Array.isArray(value?.choices)) for (const choice of value.choices) {
+      if (typeof choice?.delta?.content === 'number' && Number.isFinite(choice.delta.content)) {
+        choice.delta.content = String(choice.delta.content);
+        changed++;
+      }
+    }
+    if (!changed) return event;
+    stream.normalizedChunks += changed;
+    let written = false;
+    return lines.filter(line => !line.startsWith('data:') || !written && (written = true))
+      .map(line => line.startsWith('data:') ? 'data: ' + JSON.stringify(value) : line)
+      .join(event.includes('\r\n') ? '\r\n' : '\n');
+  }
+  function consume(text) {
+    pending += text;
+    let boundary;
+    while ((boundary = /\r?\n\r?\n/.exec(pending))) {
+      const end = boundary.index + boundary[0].length;
+      if (Buffer.byteLength(pending.slice(0, end)) > maxEventBytes) throw Error('SSE event too large');
+      stream.push(convert(pending.slice(0, end)));
+      pending = pending.slice(end);
+    }
+    if (Buffer.byteLength(pending) > maxEventBytes) throw Error('SSE event too large');
+  }
+  return stream;
+}
 
 export function normalize(payload) {
   let changed = 0;
@@ -96,8 +146,13 @@ export function createServer({ upstream, model, log = console.log,
         response.on('error', () => res.destroy());
         response.on('end', () => clearTimeout(deadline));
         response.on('close', () => clearTimeout(deadline));
-        // Preserve SSE bytes and JSON/error bodies unchanged, with backpressure.
-        response.pipe(res);
+        if (/^text\/event-stream(?:;|$)/i.test(headers['Content-Type'])) {
+          const normalizer = normalizeStream();
+          pipeline(response, normalizer, res, error => {
+            log(JSON.stringify({ streamComplete: !error,
+              normalizedContentChunks: normalizer.normalizedChunks }));
+          });
+        } else pipeline(response, res, () => {});
       });
       out.on('error', () => {
         clearTimeout(deadline);
@@ -129,3 +184,4 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
     setTimeout(() => process.exit(0), 5000).unref();
   });
 }
+

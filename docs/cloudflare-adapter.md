@@ -9,11 +9,19 @@ OpenClaw 2026.9.3 también falló en la segunda petición incluso con
 `requiresStringContent: true`. El cuerpo enviado por OpenClaw aún no se ha
 capturado: no está confirmado que el valor nulo sea su único problema.
 
-Este experimento cambia únicamente `content: null` a `content: ""` en mensajes
+En la prueba real, el adaptador permitió completar la llamada MCP. Después se
+observó que desaparecían las cifras incluso sin herramientas. La captura directa
+de Cloudflare confirmó nueve fragmentos `delta.content` numéricos (por ejemplo
+`1` en lugar de `"1"`). Al conservar solo texto se obtiene `CPU .%, RAM .%, nodos .`;
+al convertir esos fragmentos se recupera `CPU 12.34%, RAM 56.78%, nodos 4.`.
+
+Este experimento cambia `content: null` a `content: ""` en mensajes
 `assistant` con una lista no vacía de `tool_calls`. Conserva orden, IDs,
-argumentos, resultados, campos adicionales y las respuestas de Cloudflare.
+argumentos, resultados y campos adicionales. En respuestas SSE convierte únicamente
+los valores numéricos finitos de `choices[].delta.content` a texto, incluido cero.
 No convierte arrays, no modifica herramientas y no hace reintentos.
-Sirve JSON y transmite SSE sin acumular toda la respuesta.
+Los cuerpos JSON y los eventos SSE sin cambios se conservan. El streaming acumula
+como máximo un evento (límite de 1 MiB), no toda la respuesta.
 
 El adaptador solo acepta el modelo `@cf/qwen/qwen3-30b-a3b-fp8` y un endpoint fijo
 de Cloudflare. El bearer token existente de OpenClaw se reenvía por HTTPS a
@@ -21,7 +29,8 @@ Cloudflare, que valida sus permisos; el adaptador no almacena una copia.
 El salto OpenClaw-adaptador es HTTP dentro de la red Docker dedicada, sin puertos
 publicados. No conectes contenedores no confiables a esa red.
 Los logs contienen únicamente estado HTTP, número de mensajes normalizados y
-latencia hasta las cabeceras; no incluyen cuerpos, URLs de cuenta ni tokens.
+latencia hasta las cabeceras. Al terminar SSE registran `streamComplete` y
+`normalizedContentChunks`; no incluyen cuerpos, URLs de cuenta ni tokens.
 
 ## Desplegar desde la raíz del repositorio
 
@@ -50,6 +59,29 @@ El contenedor se ejecuta como usuario `node`, sin capacidades, con filesystem
 de solo lectura y límites de memoria y procesos. Usa la red `mcp-net` ya existente.
 `/healthz` comprueba solo el adaptador, no credenciales ni disponibilidad de Cloudflare.
 
+## Actualizar un adaptador ya instalado
+
+Desde la raíz del repositorio:
+
+```bash
+git pull --ff-only
+unset CLOUDFLARE_ACCOUNT_ID
+docker compose --env-file config/secrets/runtime.env \\
+  -f docker/cloudflare-adapter/docker-compose.yml up -d --build --force-recreate
+```
+
+Si el proveedor ya apunta a `http://cloudflare-adapter:8080/v1`, basta con
+recrear el adaptador. Prueba en una sesión nueva:
+
+```bash
+docker exec -it openclaw openclaw agent \\
+  --agent cloudflare-test \\
+  --session-id "$(cat /proc/sys/kernel/random/uuid)" \\
+  --message "Sin usar herramientas, copia exactamente: CPU 12.34%, RAM 56.78%, nodos 4."
+```
+
+Después consulta los nodos y contrasta las cifras con Proxmox.
+
 ## Conectar únicamente el proveedor de prueba
 
 Requiere el agente y proveedor `cloudflare-test` ya configurados con Qwen, su
@@ -72,6 +104,8 @@ de Grafana. Que exista un resumen no basta: confirma que contiene datos actuales
 y que las llamadas MCP finalizaron correctamente.
 
 Interpretación:
+- `normalizedContentChunks > 0`: se recuperaron fragmentos numéricos del streaming.
+- `streamComplete: false`: el streaming se interrumpió; no des por completo el informe.
 - `normalized: 1` o superior: el adaptador recibió y corrigió mensajes con nulos.
 - `upstreamStatus: 200`: Cloudflare aceptó esa petición; comprueba también que
   OpenClaw termine sin error y con resultados de herramientas.
@@ -109,4 +143,5 @@ node --test docker/cloudflare-adapter/server.test.mjs
 Las pruebas usan un servidor local ficticio: transformación acotada e idempotente,
 preservación de datos, reenvío de autenticación, SSE incremental, errores sin
 reintentos, timeout, límites y ausencia de contenidos en logs.
-No demuestran todavía que el intercambio OpenClaw-Cloudflare real esté resuelto.
+La captura real se reprodujo localmente y recuperó todas las cifras sin alterar
+otros campos. Tras desplegar, queda verificar la respuesta visible en OpenClaw.

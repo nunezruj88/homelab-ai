@@ -9,8 +9,11 @@ persiste el rechazo de la segunda petición incluso con `requiresStringContent`.
 Todavía no hemos inspeccionado el cuerpo exacto de esa petición; los mensajes
 `oneOf` no identifican por sí solos la causa única.
 
-Se propone un [adaptador experimental](cloudflare-adapter.md) que corrige solamente
-ese valor nulo. La evidencia histórica que sigue se conserva como registro, no
+El [adaptador experimental](cloudflare-adapter.md) permitió completar una consulta
+MCP al corregir ese valor nulo. Una segunda incompatibilidad quedó confirmada en
+una captura directa: Cloudflare entrega algunos `delta.content` como números y
+la respuesta visible pierde las cifras. El adaptador ahora convierte esos valores
+a texto; la reproducción local recupera las cifras y falta validar el despliegue. La evidencia histórica que sigue se conserva como registro, no
 como confirmación de la causa actual ni de un fallo general de Workers AI.
 
 Se intentó usar Cloudflare Workers AI (modelo `qwen3-30b-a3b-fp8`, que sí soporta function calling nativamente según la documentación de Cloudflare) a través de LiteLLM como proxy OpenAI-compatible, como cerebro para OpenClaw.
