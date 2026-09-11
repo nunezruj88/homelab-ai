@@ -14,8 +14,9 @@ OpenClaw no tiene acceso al socket Docker. Proxmox MCP funciona como servicio
 independiente con transporte Streamable HTTP, herramientas `read` y un token
 `PVEAuditor`. Consulta [el diseño del plano de control](docs/arquitectura-mcp.md).
 
-> Cloudflare Workers AI + LiteLLM se probaron y se aparcaron por un problema de
-> tool-calling multi-turno. El stack activo usa Moonshot de forma nativa. Consulta
+> Moonshot sigue siendo el proveedor principal. Cloudflare funciona con un
+> adaptador dedicado, incluido el intercambio MCP y las cifras de las respuestas.
+> La prueba histórica con LiteLLM se conserva en
 > [el apéndice de Cloudflare](docs/apendice-a-cloudflare.md).
 
 ## Estructura
@@ -370,6 +371,149 @@ Para versiones posteriores, elige explícitamente una versión publicada y revis
 sus notas antes de repetir el proceso. Si una actualización migra los datos,
 volver a una imagen anterior puede no ser suficiente: conserva la copia previa.
 
+## 13. Añadir nuevos agentes
+
+Un agente tiene su propio identificador, workspace, credenciales e historial.
+El proveedor define la conexión API; la referencia del modelo combina
+`PROVEEDOR/ID_DEL_MODELO`. Varios agentes pueden utilizar el mismo proveedor.
+El nombre visible del agente y el alias del modelo son etiquetas distintas.
+
+Ejemplos de esta instalación:
+
+| Agente (ID interno) | Proveedor | Referencia del modelo | Uso |
+| --- | --- | --- | --- |
+| `main` | `moonshot` | `moonshot/kimi-k2.6` | Chat principal |
+| `homelab-observer` | Según su configuración | Consultar con `config get agents.entries.homelab-observer.model` | Informe de salud |
+| `cloudflare-test` | `cloudflare-test` | `cloudflare-test/@cf/qwen/qwen3-30b-a3b-fp8` | Qwen mediante adaptador; nombre visible configurable como `cloudflare` |
+| `nvidia` | `nvidia` | `nvidia/nvidia/nemotron-3.5-lightning-30b-a3b` | Nemotron mediante NVIDIA |
+
+El doble `nvidia/nvidia/` es correcto: el segundo `nvidia/` pertenece al ID
+del modelo. La API directa de Lightning respondió correctamente; comprueba
+por separado su ejecución con herramientas desde OpenClaw.
+
+### 1. Elegir y configurar el proveedor
+
+Ejecuta los comandos en el LXC. Consulta primero los agentes existentes:
+
+```bash
+docker exec openclaw openclaw agents list
+```
+
+Si el proveedor ya funciona, reutilízalo. Para una instalación nueva de NVIDIA:
+
+```bash
+docker exec openclaw openclaw config set --batch-json \
+  '[{"path":"models.providers.nvidia","value":{"baseUrl":"https://integrate.api.nvidia.com/v1","api":"openai-completions","models":[{"id":"nvidia/nemotron-3.5-lightning-30b-a3b","name":"Nemotron 3.5 Lightning","input":["text"],"contextWindow":1048576,"maxTokens":16384}]}}]'
+```
+
+Este bloque reemplaza la configuración del proveedor `nvidia`: si ya tiene otros
+modelos u opciones, consérvalos al editarlo. No deduzcas la disponibilidad por el
+nombre: prueba el ID exacto con tu cuenta. Kimi K2.6 devolvió HTTP 404 desde NVIDIA
+en esta instalación, aunque figuraba en su catálogo.
+
+Cloudflare utiliza `http://cloudflare-adapter:8080/v1` como base URL. Despliega
+primero el [adaptador](docs/cloudflare-adapter.md); la conexión directa no incluye
+las correcciones de contenido nulo y cifras en streaming.
+
+### 2. Añadir el modelo al selector web
+
+```bash
+docker exec openclaw openclaw config set agents.defaults.models \
+  '{"nvidia/nvidia/nemotron-3.5-lightning-30b-a3b":{"alias":"NVIDIA Lightning"}}' \
+  --strict-json --merge
+```
+
+`--merge` conserva las entradas existentes. El equivalente para Cloudflare es:
+
+```bash
+docker exec openclaw openclaw config set agents.defaults.models \
+  '{"cloudflare-test/@cf/qwen/qwen3-30b-a3b-fp8":{"alias":"Cloudflare Qwen"}}' \
+  --strict-json --merge
+```
+
+### 3. Crear el agente y guardar su clave
+
+Ejecuta `agents add` solo si ese ID todavía no existe:
+
+```bash
+docker exec openclaw openclaw agents add nvidia \
+  --workspace /home/node/.openclaw/workspace-nvidia \
+  --model nvidia/nvidia/nemotron-3.5-lightning-30b-a3b \
+  --non-interactive
+
+docker exec -it openclaw openclaw models auth paste-api-key \
+  --provider nvidia --agent nvidia
+```
+
+Pega la clave cuando se solicite; no la escribas como argumento ni la guardes
+en el repositorio. Si seleccionas el modelo desde otro agente, ese agente
+también debe disponer de autenticación para el proveedor.
+
+Para crear Cloudflare desde cero, el bloque equivalente es:
+
+```bash
+docker exec openclaw openclaw agents add cloudflare-test \
+  --workspace /home/node/.openclaw/workspace-cloudflare-test \
+  --model cloudflare-test/@cf/qwen/qwen3-30b-a3b-fp8 \
+  --non-interactive
+
+docker exec -it openclaw openclaw models auth paste-api-key \
+  --provider cloudflare-test --agent cloudflare-test
+```
+
+Para cambiar el modelo de un agente existente, no vuelvas a crearlo:
+
+```bash
+docker exec openclaw openclaw config set --batch-json \
+  '[{"path":"agents.entries.nvidia.model","value":"nvidia/nvidia/nemotron-3.5-lightning-30b-a3b"}]'
+```
+
+### 4. Limitar las herramientas y verificar
+
+Ejemplo para NVIDIA; usa `agents.entries.cloudflare-test.tools` para Cloudflare:
+
+```bash
+docker exec openclaw openclaw config set --batch-json \
+  '[{"path":"agents.entries.nvidia.tools","value":{"allow":["proxmox__*","grafana__*","session_status"]}}]'
+
+docker restart openclaw
+docker exec openclaw openclaw config get agents.entries.nvidia.tools
+
+docker exec -it openclaw openclaw agent \
+  --agent nvidia \
+  --session-id "$(cat /proc/sys/kernel/random/uuid)" \
+  --message "Sin usar herramientas, copia exactamente: CPU 12.34%, RAM 56.78%, nodos 4."
+```
+
+Esta lista permite las herramientas de los servidores Proxmox y Grafana:
+el modo de solo lectura depende también de la configuración y credenciales MCP
+descritas anteriormente. No añadas herramientas de escritura por cambiar de modelo.
+
+Después abre una sesión nueva del agente en la web y solicita:
+
+> Consulta los nodos de Proxmox y las alertas activas de Grafana. Resume sus
+> datos reales, indica qué información no has podido consultar y no ejecutes cambios.
+
+Contrasta las cifras con las interfaces de Proxmox y Grafana. Un saludo correcto
+no demuestra todavía que funcionen las llamadas MCP.
+
+### 5. Cambiar el nombre visible
+
+Para mostrar `cloudflare` conservando el agente actual:
+
+```bash
+docker exec openclaw openclaw agents set-identity \
+  --agent cloudflare-test --name "cloudflare"
+```
+
+Recarga la web. El ID interno sigue siendo `cloudflare-test`; los comandos,
+credenciales, workspace y referencia del modelo mantienen ese identificador.
+Este comando no migra ni renombra el ID interno.
+
+Referencias: [gestión de agentes](https://docs.openclaw.ai/cli/agents),
+[configuración de modelos](https://docs.openclaw.ai/gateway/config-agents/models)
+y [proveedor NVIDIA](https://docs.openclaw.ai/providers/nvidia).
+
 ## Checklist
 
 - [ ] LXC, Docker, `ia-net` y `mcp-net` operativos.
@@ -440,8 +584,8 @@ El aviso por sí solo no demuestra que el secreto se haya escrito en la configur
 
 ## Experimento Cloudflare Workers AI
 
-Las pruebas directas con Qwen funcionan con contenido de texto, pero el agente
-OpenClaw aún encuentra un rechazo HTTP 400 al continuar con herramientas.
+La prueba real con Qwen en OpenClaw ya completó consultas a Proxmox MCP y
+conservó las cifras tras desplegar el adaptador.
 Se ha añadido un [adaptador experimental y su guía de prueba](docs/cloudflare-adapter.md)
 para normalizar mensajes assistant con content nulo y tool_calls, y conservar
 los dígitos que Cloudflare entrega como números en el streaming. La guía incluye
