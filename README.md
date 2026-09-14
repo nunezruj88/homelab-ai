@@ -467,7 +467,7 @@ Ejemplo para NVIDIA; usa `agents.entries.cloudflare-test.tools` para Cloudflare:
 
 ```bash
 docker exec openclaw openclaw config set --batch-json \
-  '[{"path":"agents.entries.nvidia.tools","value":{"allow":["proxmox__*","session_status"]}}]'
+  '[{"path":"agents.entries.nvidia.tools","value":{"allow":["proxmox__*","homeassistant__*","session_status"]}}]'
 
 docker restart openclaw
 docker exec openclaw openclaw config get agents.entries.nvidia.tools
@@ -478,9 +478,9 @@ docker exec -it openclaw openclaw agent \
   --message "Sin usar herramientas, copia exactamente: CPU 12.34%, RAM 56.78%, nodos 4."
 ```
 
-Esta lista permite las herramientas del servidor Proxmox:
-el modo de solo lectura depende también de la configuración y credenciales MCP
-descritas anteriormente. No añadas herramientas de escritura por cambiar de modelo.
+Esta lista permite Proxmox y Home Assistant. Proxmox conserva su modo de solo
+lectura. `homeassistant__*` incluye las herramientas de control que ofrezca HA-MCP;
+el observador diario usa únicamente `homeassistant__ha_get_logs`.
 
 Después abre una sesión nueva del agente en la web y solicita:
 
@@ -489,6 +489,28 @@ Después abre una sesión nueva del agente en la web y solicita:
 
 Contrasta las cifras con la interfaz de Proxmox. Un saludo correcto
 no demuestra todavía que funcionen las llamadas MCP.
+
+### Aplicar Proxmox y Home Assistant a todos los agentes existentes
+
+Con ambos servidores registrados y funcionando, ejecuta:
+
+```bash
+scripts/06-habilitar-mcps-agentes.sh
+```
+
+El script descubre todos los agentes, incluidos main, cloudflare-test, nvidia y
+openai. Añade `proxmox__*` y `homeassistant__*` conservando los demás permisos,
+modelos y credenciales. Si no hay allowlist explícita, utiliza `alsoAllow`.
+Para homelab-observer mantiene Proxmox, lectura de logs HA y session_status.
+No crea servidores ni solicita sus secretos; reutiliza los registros existentes.
+
+La política de Home Assistant de los agentes de chat incluye herramientas de
+control. Las restricciones deny, globales, por proveedor y del sandbox siguen
+vigentes: si un agente no ve los MCP, revisa esas capas antes de ampliarlas.
+Abre una sesión nueva y pide una consulta de lectura a Proxmox y Home Assistant.
+Repite el script cuando añadas otro agente.
+
+Referencia: [política de herramientas](https://docs.openclaw.ai/gateway/config-tools/tool-policy).
 
 ### 5. Cambiar el nombre visible
 
