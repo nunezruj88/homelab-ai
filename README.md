@@ -514,6 +514,19 @@ Referencias: [gestión de agentes](https://docs.openclaw.ai/cli/agents),
 [configuración de modelos](https://docs.openclaw.ai/gateway/config-agents/models)
 y [proveedor NVIDIA](https://docs.openclaw.ai/providers/nvidia).
 
+## 14. Dashboard del informe en Home Assistant
+
+La [guía del dashboard](docs/dashboard-homeassistant.md) incluye un flujo importable
+para Node-RED en `10.8.1.28`, un panel YAML y un publicador que consulta el último
+informe existente cada cinco minutos. Reutiliza la conexión de Node-RED a Home
+Assistant y requiere Node-RED Companion para crear el sensor.
+
+Muestra el informe de Proxmox y logs de Home Assistant, su fecha y avisos de
+antigüedad o de ejecución fallida. Conserva la entrega en la web de OpenClaw y no
+realiza llamadas adicionales al modelo. El despliegue es opcional y debe probarse
+manualmente antes de activar el temporizador. No requiere volver a ejecutar el
+script 04 ni modificar la base de datos de OpenClaw.
+
 ## Checklist
 
 - [ ] LXC, Docker, `ia-net` y `mcp-net` operativos.

@@ -1,0 +1,215 @@
+[
+  {
+    "id": "hl_report_tab",
+    "type": "tab",
+    "label": "Informe homelab",
+    "disabled": false,
+    "info": "Configurar HOMELAB_REPORT_TOKEN en las variables de esta pestaña. Seleccionar el servidor HA existente en el nodo Sensor y su Entity Config. No exportar el flujo con el token real."
+  },
+  {
+    "id": "hl_comment",
+    "type": "comment",
+    "z": "hl_report_tab",
+    "name": "Seleccionar servidor HA y configurar token antes de Deploy",
+    "info": "Requiere Node-RED Companion en Home Assistant. Endpoint POST /homelab/report. Solo actualiza el sensor dedicado.",
+    "x": 390,
+    "y": 80,
+    "wires": []
+  },
+  {
+    "id": "hl_in",
+    "type": "http in",
+    "z": "hl_report_tab",
+    "name": "Recibir informe",
+    "url": "/homelab/report",
+    "method": "post",
+    "upload": false,
+    "swaggerDoc": "",
+    "x": 130,
+    "y": 160,
+    "wires": [
+      [
+        "hl_validate"
+      ]
+    ]
+  },
+  {
+    "id": "hl_validate",
+    "type": "function",
+    "z": "hl_report_tab",
+    "name": "Validar token e informe",
+    "func": "const token = env.get(\"HOMELAB_REPORT_TOKEN\");\nconst expectedJob = env.get(\"HOMELAB_REPORT_JOB_ID\") || \"c2c20bac-2f48-4605-b64a-5f7dfd40c743\";\nfunction reject(status, error) {\n    msg.statusCode = status;\n    msg.headers = {\"Content-Type\":\"application/json\",\"Cache-Control\":\"no-store\"};\n    msg.payload = {ok:false,error};\n    return [null,msg];\n}\nif (!/^[a-f0-9]{64}$/i.test(token || \"\")) return reject(503,\"Receiver not configured\");\nif (msg.req?.headers?.authorization !== \"Bearer \" + token) return reject(401,\"Unauthorized\");\nconst p = msg.payload;\nif (!p || p.schema !== 1 || p.job_id !== expectedJob\n    || typeof p.report_id !== \"string\" || !p.report_id || p.report_id.length > 200\n    || typeof p.report !== \"string\" || !p.report.trim()\n    || Buffer.byteLength(p.report,\"utf8\") > 32768\n    || typeof p.generated_at !== \"string\" || !Number.isFinite(Date.parse(p.generated_at))\n    || Date.parse(p.generated_at) > Date.now() + 300000\n    || ![\"ok\",\"error\",\"skipped\"].includes(p.last_run_status)) {\n    return reject(400,\"Invalid report\");\n}\nmsg.report = {\n    generated_at:new Date(p.generated_at).toISOString(),\n    report:p.report,\n    report_id:p.report_id,\n    job_id:p.job_id,\n    last_run_status:p.last_run_status\n};\ndelete msg.req.headers.authorization;\nreturn [msg,null];",
+    "outputs": 2,
+    "timeout": 0,
+    "noerr": 0,
+    "initialize": "",
+    "finalize": "",
+    "libs": [],
+    "x": 360,
+    "y": 160,
+    "wires": [
+      [
+        "hl_sensor"
+      ],
+      [
+        "hl_response"
+      ]
+    ]
+  },
+  {
+    "id": "hl_sensor",
+    "type": "ha-sensor",
+    "z": "hl_report_tab",
+    "name": "Actualizar informe en HA",
+    "entityConfig": "hl_entity",
+    "version": 0,
+    "state": "report.generated_at",
+    "stateType": "msg",
+    "attributes": [
+      {
+        "property": "report",
+        "value": "report.report",
+        "valueType": "msg"
+      },
+      {
+        "property": "generated_at",
+        "value": "report.generated_at",
+        "valueType": "msg"
+      },
+      {
+        "property": "report_id",
+        "value": "report.report_id",
+        "valueType": "msg"
+      },
+      {
+        "property": "job_id",
+        "value": "report.job_id",
+        "valueType": "msg"
+      },
+      {
+        "property": "last_run_status",
+        "value": "report.last_run_status",
+        "valueType": "msg"
+      }
+    ],
+    "inputOverride": "block",
+    "outputProperties": [],
+    "server": "",
+    "x": 630,
+    "y": 140,
+    "wires": [
+      [
+        "hl_ack"
+      ]
+    ]
+  },
+  {
+    "id": "hl_ack",
+    "type": "function",
+    "z": "hl_report_tab",
+    "name": "Confirmar actualización",
+    "func": "msg.statusCode = 200;\nmsg.headers = {\"Content-Type\":\"application/json\",\"Cache-Control\":\"no-store\"};\nmsg.payload = {ok:true,report_id:msg.report.report_id};\nreturn msg;",
+    "outputs": 1,
+    "timeout": 0,
+    "noerr": 0,
+    "initialize": "",
+    "finalize": "",
+    "libs": [],
+    "x": 880,
+    "y": 140,
+    "wires": [
+      [
+        "hl_response"
+      ]
+    ]
+  },
+  {
+    "id": "hl_response",
+    "type": "http response",
+    "z": "hl_report_tab",
+    "name": "Respuesta HTTP",
+    "statusCode": "",
+    "headers": {},
+    "x": 890,
+    "y": 240,
+    "wires": []
+  },
+  {
+    "id": "hl_catch",
+    "type": "catch",
+    "z": "hl_report_tab",
+    "name": "Error al actualizar HA",
+    "scope": [
+      "hl_sensor"
+    ],
+    "uncaught": false,
+    "x": 370,
+    "y": 320,
+    "wires": [
+      [
+        "hl_error"
+      ]
+    ]
+  },
+  {
+    "id": "hl_error",
+    "type": "function",
+    "z": "hl_report_tab",
+    "name": "Responder error sin contenido",
+    "func": "if (!msg.res || msg.res.headersSent) return null;\nmsg.statusCode = 503;\nmsg.headers = {\"Content-Type\":\"application/json\",\"Cache-Control\":\"no-store\"};\nmsg.payload = {ok:false,error:\"Home Assistant update failed\"};\ndelete msg.error;\nreturn msg;",
+    "outputs": 1,
+    "timeout": 0,
+    "noerr": 0,
+    "initialize": "",
+    "finalize": "",
+    "libs": [],
+    "x": 660,
+    "y": 320,
+    "wires": [
+      [
+        "hl_response"
+      ]
+    ]
+  },
+  {
+    "id": "hl_entity",
+    "type": "ha-entity-config",
+    "server": "",
+    "deviceConfig": "",
+    "name": "Homelab informe",
+    "version": "6",
+    "entityType": "sensor",
+    "haConfig": [
+      {
+        "property": "name",
+        "value": "Homelab informe"
+      },
+      {
+        "property": "icon",
+        "value": "mdi:clipboard-text-clock-outline"
+      },
+      {
+        "property": "entity_picture",
+        "value": ""
+      },
+      {
+        "property": "entity_category",
+        "value": ""
+      },
+      {
+        "property": "device_class",
+        "value": "timestamp"
+      },
+      {
+        "property": "unit_of_measurement",
+        "value": ""
+      },
+      {
+        "property": "state_class",
+        "value": ""
+      }
+    ],
+    "resend": true,
+    "debugEnabled": false
+  }
+]
