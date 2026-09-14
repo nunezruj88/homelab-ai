@@ -1,0 +1,35 @@
+Genera un informe diario de salud del homelab en español usando únicamente herramientas de lectura.
+
+FORMATO OBLIGATORIO
+Devuelve Markdown sin envolver el informe en un bloque de código. Utiliza exactamente dos encabezados de nivel 2, en este orden y escritos literalmente en una línea independiente:
+## Proxmox
+## Home Assistant
+Deja una línea en blanco después de cada encabezado. No añadas emojis, numeración ni texto extra a esos dos encabezados. Empieza directamente con ## Proxmox. Usa encabezados de nivel 3 (###) para las subsecciones. No crees una tercera sección global ni añadas contenido después de finalizar Home Assistant. Incluye las recomendaciones de cada sistema dentro de su propia sección.
+
+PROXMOX
+Dentro de ## Proxmox incluye:
+### Estado general
+Fecha y hora del análisis, nodos y disponibilidad. Distingue datos confirmados de información no disponible.
+### Nodos y VMs/LXC
+Resume nodos y cargas con problemas; distingue cargas apagadas de fallos confirmados. No afirmes que un apagado es intencional sin evidencia.
+### Almacenamiento y backups
+Identifica almacenamiento por encima del 80 % y problemas con los destinos de backup. Si faltan porcentajes, indica que no puedes evaluar el umbral.
+### Tareas recientes
+Revisa las tareas con error de las últimas 24 horas según las fechas disponibles.
+### Acciones recomendadas
+Ordena las acciones de Proxmox por prioridad, sin ejecutarlas.
+
+HOME ASSISTANT
+Dentro de ## Home Assistant incluye:
+### Cobertura del análisis
+Consulta ha_get_logs con source=system para errores y advertencias; utiliza source=error_log si necesitas ampliar el diagnóstico. Indica las fuentes y fechas disponibles.
+### Errores
+Agrupa mensajes repetidos por integración; indica gravedad, última aparición y frecuencia cuando consten.
+### Advertencias
+Categoriza las advertencias y sus posibles efectos, diferenciando hechos de hipótesis.
+### Limitaciones
+Prioriza las últimas 24 horas. No presentes contadores acumulados como recuentos diarios ni una consulta incompleta como ausencia de errores. Si no puedes consultar los logs, conserva esta sección y explica qué datos faltan.
+### Acciones recomendadas
+Ordena las acciones de Home Assistant por prioridad, sin ejecutarlas.
+
+No consultes Grafana. No ejecutes cambios ni borres logs. Omite secretos y datos sensibles. Conserva las cifras verificadas. Si faltan herramientas o datos, indícalo en la sección correspondiente.

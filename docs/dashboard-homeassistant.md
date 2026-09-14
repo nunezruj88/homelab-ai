@@ -226,3 +226,35 @@ Referencias: [nodo Sensor](https://zachowj.github.io/node-red-contrib-home-assis
 [variables de Node-RED](https://nodered.org/docs/user-guide/environment-variables),
 [tarjeta Markdown](https://www.home-assistant.io/dashboards/markdown),
 [historial de OpenClaw](https://docs.openclaw.ai/cli/cron).
+
+## Separar el informe por sistema
+
+El mensaje versionado en `config/automations/homelab-health-daily.txt` exige
+exactamente `## Proxmox` y `## Home Assistant`, sin emojis en esos encabezados.
+Cada sección contiene sus propias recomendaciones y subsecciones de nivel 3.
+Si falta información, se conserva el encabezado y se explica la limitación.
+
+El script 04 utiliza este archivo para tareas nuevas. Para aplicar el formato
+a la automatización existente, ejecuta desde el repositorio:
+
+```bash
+git pull --ff-only
+docker exec openclaw openclaw automations edit \
+  c2c20bac-2f48-4605-b64a-5f7dfd40c743 \
+  --message "$(cat config/automations/homelab-health-daily.txt)"
+```
+
+Solo se actualiza el mensaje; se conservan horario, permisos y entrega.
+Sustituye el ID si recreaste la tarea. Los informes antiguos no se reformatean.
+Para generar y publicar uno con las nuevas secciones:
+
+```bash
+docker exec openclaw openclaw automations run \
+  c2c20bac-2f48-4605-b64a-5f7dfd40c743 --wait
+bash scripts/05-publicar-informe-ha.sh
+```
+
+Comprueba que ambas cabeceras estén presentes en el atributo `report`. Este
+contrato de formato permite a los sensores de plantilla separar el texto.
+El modelo debe respetarlo; el publicador conserva su respuesta, no inventa
+secciones ni clasifica contenido automáticamente.

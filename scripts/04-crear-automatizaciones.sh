@@ -34,7 +34,7 @@ if docker exec openclaw openclaw automations list --all --json | grep -q "$JOB_N
 fi
 
 docker exec openclaw openclaw automations create "0 8 * * *" \
-  "Genera un informe de salud del homelab usando únicamente herramientas de lectura de Proxmox y los logs de Home Assistant. Resume nodos o cargas con problemas, almacenamiento por encima del 80 % y tareas recientes con error. Distingue cargas apagadas de fallos confirmados. Consulta ha_get_logs con source=system para errores y advertencias; usa source=error_log si necesitas ampliar el diagnóstico. Prioriza las últimas 24 horas según las fechas disponibles, agrupa mensajes repetidos e indica integración afectada, gravedad y última aparición. Explica los límites de cobertura y no presentes contadores acumulados como recuentos diarios. No consultes Grafana ni borres logs. Omite secretos del informe. No ejecutes cambios. Si faltan datos, indícalo explícitamente. Prioriza riesgos y termina con acciones recomendadas." \
+  "$(cat "$REPO_ROOT/config/automations/homelab-health-daily.txt")" \
   --name "$JOB_NAME" \
   --agent "$AGENT_ID" \
   --session isolated \
