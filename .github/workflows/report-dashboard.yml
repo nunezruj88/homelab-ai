@@ -1,0 +1,37 @@
+name: report-dashboard
+on:
+  pull_request:
+    paths:
+      - 'integrations/homeassistant/**'
+      - 'scripts/05-publicar-informe-ha.sh'
+      - '.github/workflows/report-dashboard.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'integrations/homeassistant/**'
+      - 'scripts/05-publicar-informe-ha.sh'
+      - '.github/workflows/report-dashboard.yml'
+permissions:
+  contents: read
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - run: node --test integrations/homeassistant/report-publisher.test.mjs
+      - run: bash -n scripts/05-publicar-informe-ha.sh
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: pip install PyYAML==6.0.2
+      - name: Validate dashboard YAML
+        run: |
+          python - <<'PY'
+          import yaml
+          with open('integrations/homeassistant/dashboard.yaml', encoding='utf-8') as f:
+              data = yaml.safe_load(f)
+          assert len(data['views'][0]['cards']) == 2
+          PY

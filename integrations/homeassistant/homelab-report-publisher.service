@@ -1,0 +1,12 @@
+[Unit]
+Description=Publicar el último informe de OpenClaw en Home Assistant
+After=docker.service network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=root
+WorkingDirectory=/root/homelab-ai
+ExecStart=/bin/bash /root/homelab-ai/scripts/05-publicar-informe-ha.sh
+TimeoutStartSec=120
+UMask=0077

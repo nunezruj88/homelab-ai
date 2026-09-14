@@ -1,0 +1,37 @@
+title: Estado del homelab
+views:
+  - title: Informe diario
+    path: informe-diario
+    icon: mdi:clipboard-text-clock-outline
+    cards:
+      - type: markdown
+        title: Informe del homelab
+        entity_id:
+          - sensor.homelab_informe
+        content: >-
+          {% set raw = state_attr('sensor.homelab_informe', 'generated_at') %}
+          {% set stamp = as_timestamp(raw, 0) %}
+          {% if stamp == 0 %}
+          **Esperando el primer informe.**
+
+          Todavía no se ha recibido un informe desde OpenClaw.
+          {% else %}
+          **Informe generado:** {{ as_local(as_datetime(raw)).strftime('%d/%m/%Y %H:%M') }}
+
+          {% if as_timestamp(now()) - stamp > 108000 %}
+          ⚠️ **Informe antiguo:** lleva más de 30 horas sin actualizarse.
+          {% endif %}
+          {% if state_attr('sensor.homelab_informe', 'last_run_status') != 'ok' %}
+          ⚠️ **Última ejecución:** {{ state_attr('sensor.homelab_informe', 'last_run_status') }}.
+          Se muestra el último informe generado correctamente.
+          {% endif %}
+
+          Proxmox · Logs de Home Assistant
+          {% endif %}
+      - type: markdown
+        title: Diagnóstico y recomendaciones
+        entity_id:
+          - sensor.homelab_informe
+        content: >-
+          {{ state_attr('sensor.homelab_informe', 'report')
+             or 'El contenido aparecerá después de la primera publicación.' }}
