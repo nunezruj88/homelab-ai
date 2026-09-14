@@ -1,11 +1,10 @@
 # Homelab IA
 
 Stack de IA agentic autoalojado sobre Proxmox. OpenClaw usa Kimi/Moonshot como
-modelo y consume Proxmox, Grafana, Home Assistant y Node-RED mediante MCP.
+modelo y consume Proxmox, Home Assistant y Node-RED mediante MCP.
 
 ```text
-                         ┌─ Proxmox MCP (solo lectura) ── Proxmox API
-OpenClaw ── MCP HTTP ────┼─ Grafana MCP (solo lectura) ── Grafana API
+OpenClaw ── MCP HTTP ────┬─ Proxmox MCP (solo lectura) ── Proxmox API
                          ├─ Home Assistant MCP
                          └─ Node-RED MCP
 ```
@@ -27,7 +26,7 @@ homelab-ai/
 │   ├── mcp/catalog.yaml             # inventario y política de los MCP
 │   └── secrets/runtime.env.example  # plantilla única; runtime.env no se versiona
 ├── docker/
-│   ├── mcp/docker-compose.yml       # Proxmox MCP + Grafana MCP
+│   ├── mcp/docker-compose.yml       # Proxmox MCP
 │   ├── openclaw/docker-compose.yml
 │   ├── litellm/                     # investigación aparcada
 │   └── portainer/
@@ -44,7 +43,6 @@ homelab-ai/
 - Proxmox VE accesible por HTTPS.
 - Docker Engine y Docker Compose plugin dentro del LXC.
 - Cuenta Moonshot y API key.
-- Grafana 9 o posterior con una service account `Viewer`.
 - Certificado de confianza en la API Proxmox. Para un laboratorio sin PKI se
   puede usar temporalmente `PROXMOX_VERIFY_SSL=false`.
 - Home Assistant y Node-RED son opcionales.
@@ -94,7 +92,6 @@ Genera tokens distintos:
 
 ```bash
 openssl rand -hex 32  # OPENCLAW_GATEWAY_TOKEN
-openssl rand -hex 32  # GRAFANA_MCP_SERVER_TOKEN
 ```
 
 `runtime.env` está ignorado por Git. No lo copies a incidencias, logs o capturas.
@@ -114,12 +111,6 @@ pveum user token permissions mcp@pve mcp
 ```
 
 Copia el secret generado a `PROXMOX_TOKEN_VALUE`.
-
-### Grafana
-
-Crea una service account con rol `Viewer` y guarda su token en
-`GRAFANA_SERVICE_ACCOUNT_TOKEN`. `GRAFANA_MCP_SERVER_TOKEN` es un segundo token
-aleatorio que autentica a OpenClaw frente al propio servidor MCP.
 
 ## 5. Desplegar los MCP
 
@@ -230,7 +221,7 @@ docker restart openclaw
 docker exec -it openclaw openclaw tui
 ```
 
-Prueba primero un saludo y después consultas de lectura a Proxmox y Grafana.
+Prueba primero un saludo y después consultas de lectura a Proxmox.
 Si aparece un aviso de memoria por falta de clave OpenAI, diagnostícalo por
 separado: la clave Moonshot no configura el proveedor de embeddings.
 
@@ -243,11 +234,14 @@ cambiar los servidores ni sus credenciales.
 scripts/03-registrar-mcps.sh
 ```
 
-El script comprueba salud, registra las URLs internas y ejecuta `mcp doctor
---probe`. La cabecera de Grafana se guarda como referencia a una variable de
-entorno, no como token literal.
+El script comprueba la salud de Proxmox MCP, registra su URL interna y ejecuta
+`mcp doctor --probe`. Home Assistant se registra por separado en el punto 10.
 
 ## 9. Instalar la automatización inicial
+
+Para incluir los logs, registra primero Home Assistant siguiendo el punto 10.
+El informe consulta Proxmox y logs de Home Assistant. Si la tarea ya existe,
+el script conserva su mensaje, horario y entrega, y actualiza los permisos del observador.
 
 ```bash
 scripts/04-crear-automatizaciones.sh
@@ -255,7 +249,7 @@ scripts/04-crear-automatizaciones.sh
 
 Crea `homelab-health-daily` a las 08:00 de `AUTOMATION_TZ`. Se ejecuta en una
 sesión aislada mediante el agente `homelab-observer`. Su allowlist contiene
-únicamente `proxmox__*`, `grafana__*` y `session_status`: no dispone de shell,
+únicamente `proxmox__*`, `homeassistant__ha_get_logs` y `session_status`: no dispone de shell,
 filesystem, navegador, mensajería ni otros MCP. No entrega resultados fuera de
 OpenClaw hasta que se configure un destino explícito.
 
@@ -298,7 +292,7 @@ y [componente personalizado](https://github.com/homeassistant-ai/ha-mcp/blob/mas
 
 HA-MCP puede ofrecer herramientas de control y escritura. Registrar el servidor
 no lo convierte en solo lectura. El agente `homelab-observer` conserva su lista
-limitada a Proxmox, Grafana y `session_status`.
+limitada a Proxmox, `homeassistant__ha_get_logs` y `session_status`.
 
 ### Node-RED
 
@@ -325,7 +319,7 @@ docker compose -f docker/portainer/docker-compose.yml up -d
 En esta instalación, actualiza desde la consola del LXC mediante Docker Compose.
 El botón de actualización web no es el procedimiento utilizado para sustituir
 la imagen del contenedor. La actualización de `2026.9.2` a `2026.9.3` se ha
-probado correctamente en el homelab, incluidas las comprobaciones de ambos MCP.
+probado correctamente en el homelab, incluidas las comprobaciones de MCP.
 
 1. Haz una copia de seguridad o snapshot del LXC antes de actualizar.
 2. Edita `config/secrets/runtime.env` y fija la versión deseada. Ejemplo probado:
@@ -356,10 +350,9 @@ docker compose --env-file config/secrets/runtime.env \
 ```bash
 docker exec openclaw openclaw --version
 docker exec openclaw openclaw mcp doctor proxmox --probe
-docker exec openclaw openclaw mcp doctor grafana --probe
 ```
 
-La versión debe coincidir con la elegida y ambos MCP deben indicar `ok`.
+La versión debe coincidir con la elegida y Proxmox MCP debe indicar `ok`.
 Vuelve a abrir la interfaz web y prueba una consulta. Si falla el arranque,
 consulta `docker logs --tail 100 openclaw`.
 
@@ -474,7 +467,7 @@ Ejemplo para NVIDIA; usa `agents.entries.cloudflare-test.tools` para Cloudflare:
 
 ```bash
 docker exec openclaw openclaw config set --batch-json \
-  '[{"path":"agents.entries.nvidia.tools","value":{"allow":["proxmox__*","grafana__*","session_status"]}}]'
+  '[{"path":"agents.entries.nvidia.tools","value":{"allow":["proxmox__*","session_status"]}}]'
 
 docker restart openclaw
 docker exec openclaw openclaw config get agents.entries.nvidia.tools
@@ -485,16 +478,16 @@ docker exec -it openclaw openclaw agent \
   --message "Sin usar herramientas, copia exactamente: CPU 12.34%, RAM 56.78%, nodos 4."
 ```
 
-Esta lista permite las herramientas de los servidores Proxmox y Grafana:
+Esta lista permite las herramientas del servidor Proxmox:
 el modo de solo lectura depende también de la configuración y credenciales MCP
 descritas anteriormente. No añadas herramientas de escritura por cambiar de modelo.
 
 Después abre una sesión nueva del agente en la web y solicita:
 
-> Consulta los nodos de Proxmox y las alertas activas de Grafana. Resume sus
+> Consulta los nodos de Proxmox y su almacenamiento. Resume sus
 > datos reales, indica qué información no has podido consultar y no ejecutes cambios.
 
-Contrasta las cifras con las interfaces de Proxmox y Grafana. Un saludo correcto
+Contrasta las cifras con la interfaz de Proxmox. Un saludo correcto
 no demuestra todavía que funcionen las llamadas MCP.
 
 ### 5. Cambiar el nombre visible
@@ -527,16 +520,21 @@ realiza llamadas adicionales al modelo. El despliegue es opcional y debe probars
 manualmente antes de activar el temporizador. No requiere volver a ejecutar el
 script 04 ni modificar la base de datos de OpenClaw.
 
+## 15. Retirar Grafana MCP de instalaciones existentes
+
+Grafana MCP ya no se despliega ni se registra con estos scripts. Para quitarlo
+de todos los agentes de una instalación anterior, sigue la
+[guía de retirada](docs/retirar-grafana-mcp.md). Actualizar el repositorio por sí solo
+no elimina el registro guardado en OpenClaw.
+
 ## Checklist
 
 - [ ] LXC, Docker, `ia-net` y `mcp-net` operativos.
 - [ ] Secretos reales únicamente en `config/secrets/runtime.env`.
 - [ ] Token Proxmox dedicado, `privsep=1` y `PVEAuditor` efectivo.
-- [ ] Service account Grafana con rol `Viewer`.
 - [ ] Proxmox MCP anuncia `risk=read`.
-- [ ] Grafana MCP funciona con `--disable-write`.
 - [ ] OpenClaw no tiene montado `/var/run/docker.sock`.
-- [ ] Ambos `mcp doctor --probe` terminan correctamente.
+- [ ] `mcp doctor proxmox --probe` termina correctamente.
 - [ ] Automatización diaria probada manualmente antes de configurar entrega.
 
 ## Seguridad
@@ -579,21 +577,13 @@ OpenAI para esta configuración.
 docker exec openclaw openclaw config get agents.entries.homelab-observer.tools
 ```
 
-La lista `allow` debe contener exclusivamente `proxmox__*`, `grafana__*` y
+La lista `allow` debe contener exclusivamente `proxmox__*`, `homeassistant__ha_get_logs` y
 `session_status`. Esta consulta verifica la configuración del agente;
 `sandbox explain` muestra otra capa y no sustituye esta comprobación.
 El informe manual se ha probado con éxito. La lista no concede herramientas de
 memoria al observador aunque sus archivos estén indexados. Verificar la ejecución
 programada y el catálogo efectivo de una ejecución sigue siendo una comprobación
 separada.
-
-### Aviso de cabecera Grafana
-
-En la instalación probada, el aviso de `mcp doctor` sobre un valor sensible
-apareció aunque el archivo guardaba la referencia a
-`${GRAFANA_MCP_SERVER_TOKEN}` y la variable existía en el contenedor.
-No sustituir esa referencia por el token literal ni publicar el archivo completo.
-El aviso por sí solo no demuestra que el secreto se haya escrito en la configuración.
 
 ## Experimento Cloudflare Workers AI
 

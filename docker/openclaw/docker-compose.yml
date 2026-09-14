@@ -8,9 +8,6 @@ services:
       OPENCLAW_HOME: /home/node
       OPENCLAW_GATEWAY_TOKEN: ${OPENCLAW_GATEWAY_TOKEN:?Configura OPENCLAW_GATEWAY_TOKEN}
       OPENCLAW_GATEWAY_BIND: lan
-      # El valor se usa por referencia en la configuración de Grafana MCP.
-      # No se escribe el secreto literal en openclaw.json.
-      GRAFANA_MCP_SERVER_TOKEN: ${GRAFANA_MCP_SERVER_TOKEN:-}
     ports:
       - "${OPENCLAW_GATEWAY_HOST:-127.0.0.1}:${OPENCLAW_GATEWAY_PORT:-18789}:18789"
     volumes:

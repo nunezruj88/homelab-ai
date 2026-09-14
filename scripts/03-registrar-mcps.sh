@@ -16,25 +16,15 @@ set -a
 source "$RUNTIME_ENV"
 set +a
 
-: "${GRAFANA_MCP_SERVER_TOKEN:?Falta GRAFANA_MCP_SERVER_TOKEN en runtime.env}"
-
 echo ">> Comprobando endpoints MCP dentro de mcp-net..."
 docker run --rm --network mcp-net "$CURL_IMAGE" -fsS \
   http://proxmox-mcp:8000/readyz >/dev/null
-docker run --rm --network mcp-net "$CURL_IMAGE" -fsS \
-  -H "Authorization: Bearer ${GRAFANA_MCP_SERVER_TOKEN}" \
-  http://grafana-mcp:8000/healthz >/dev/null
 
 echo ">> Registrando Proxmox MCP (solo lectura)..."
 docker exec openclaw openclaw mcp set proxmox \
   '{"url":"http://proxmox-mcp:8000/mcp","transport":"streamable-http","enabled":true}'
 
-echo ">> Registrando Grafana MCP (solo lectura)..."
-docker exec openclaw openclaw mcp set grafana \
-  '{"url":"http://grafana-mcp:8000/mcp","transport":"streamable-http","enabled":true,"headers":{"Authorization":"Bearer ${GRAFANA_MCP_SERVER_TOKEN}"}}'
-
 echo ">> Verificando catálogo y conexión..."
 docker exec openclaw openclaw mcp doctor proxmox --probe
-docker exec openclaw openclaw mcp doctor grafana --probe
 
 echo ">> MCP registrados. OpenClaw no necesita acceso al socket Docker."

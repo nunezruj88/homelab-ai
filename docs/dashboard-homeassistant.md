@@ -156,8 +156,9 @@ journalctl -u homelab-report-publisher.service -n 30 --no-pager
 - El texto del informe se guarda como atributo y puede quedar registrado por
   Recorder según tu configuración. No se añaden métricas numéricas inventadas
   ni se intenta extraerlas con expresiones regulares del texto del modelo.
-- No ejecutes el script 04 para instalar este panel: su política original aún
-  contiene Grafana y podría sobrescribir los permisos modificados del observador.
+- El script 04 no instala este panel. Ahora limita el observador a Proxmox y
+  `homeassistant__ha_get_logs`; si la tarea ya existe, conserva su mensaje,
+  horario y entrega.
 
 Para detener solo la publicación a HA:
 
