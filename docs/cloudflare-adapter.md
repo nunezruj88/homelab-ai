@@ -85,7 +85,7 @@ Después consulta los nodos y contrasta las cifras con Proxmox.
 ## Conectar únicamente el proveedor de prueba
 
 Requiere el agente y proveedor `cloudflare-test` ya configurados con Qwen, su
-token propio y la lista `proxmox__*`, `grafana__*`, `session_status`.
+token propio y la lista `proxmox__*`, `session_status`.
 No cambies Moonshot ni el agente `homelab-observer`.
 
 ```bash
@@ -99,8 +99,7 @@ docker exec -it openclaw openclaw agent \
 docker logs --tail 20 cloudflare-adapter
 ```
 
-Si la prueba pasa, repite con una sesión nueva y solicita además los dashboards
-de Grafana. Que exista un resumen no basta: confirma que contiene datos actuales
+Si la prueba pasa, repite con una sesión nueva y consulta las VMs/LXC de Proxmox. Que exista un resumen no basta: confirma que contiene datos actuales
 y que las llamadas MCP finalizaron correctamente.
 
 Interpretación:

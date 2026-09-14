@@ -16,9 +16,6 @@ jobs:
       OPENCLAW_GATEWAY_TOKEN: test-gateway-token
       PROXMOX_HOST: 192.0.2.10
       PROXMOX_TOKEN_VALUE: test-proxmox-token
-      GRAFANA_URL: http://grafana.example.test:3000
-      GRAFANA_SERVICE_ACCOUNT_TOKEN: test-grafana-token
-      GRAFANA_MCP_SERVER_TOKEN: test-mcp-token
     steps:
       - uses: actions/checkout@v4
 

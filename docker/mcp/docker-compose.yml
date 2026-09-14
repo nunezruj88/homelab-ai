@@ -34,37 +34,6 @@ services:
     networks:
       - mcp-net
 
-  grafana-mcp:
-    image: grafana/mcp-grafana:1.3.0
-    container_name: grafana-mcp
-    restart: unless-stopped
-    environment:
-      GRAFANA_URL: ${GRAFANA_URL:?Configura GRAFANA_URL}
-      GRAFANA_SERVICE_ACCOUNT_TOKEN: ${GRAFANA_SERVICE_ACCOUNT_TOKEN:?Configura GRAFANA_SERVICE_ACCOUNT_TOKEN}
-      MCP_GRAFANA_SERVER_TOKEN: ${GRAFANA_MCP_SERVER_TOKEN:?Configura GRAFANA_MCP_SERVER_TOKEN}
-    command:
-      - -t
-      - streamable-http
-      - --address
-      - 0.0.0.0:8000
-      - --allowed-hosts
-      - grafana-mcp:8000,localhost:8000,127.0.0.1:8000
-      - --disable-write
-      - --metrics
-      - --slow-request-threshold
-      - 500ms
-    expose:
-      - "8000"
-    read_only: true
-    tmpfs:
-      - /tmp
-    cap_drop:
-      - ALL
-    security_opt:
-      - no-new-privileges:true
-    networks:
-      - mcp-net
-
 networks:
   mcp-net:
     external: true
