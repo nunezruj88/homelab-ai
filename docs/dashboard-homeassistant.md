@@ -4,7 +4,8 @@
 
 OpenClaw genera `homelab-health-daily` con Proxmox y logs de Home Assistant.
 Un publicador consulta cada cinco minutos el historial existente mediante la CLI
-y envía el último `summary` correcto a Node-RED. Node-RED actualiza un único sensor
+y exporta la sesión de la última ejecución correcta para enviar su respuesta final
+completa a Node-RED. No utiliza `summary`, que OpenClaw puede recortar. Node-RED actualiza un único sensor
 y el dashboard muestra su texto y fecha. No se vuelve a ejecutar el modelo.
 Se conserva la entrega en la web de OpenClaw; no se cambia a modo webhook.
 Tampoco se modifica ni se borra el historial o la base de datos.
@@ -101,7 +102,7 @@ El estado del sensor es la fecha; el texto está en el atributo `report`.
 
 El mensaje HTTP de éxito se devuelve después de que el nodo Sensor complete la
 actualización. Comprueba también en HA que los atributos y las cifras coincidan
-con `automations runs`. La primera publicación utiliza el informe existente más
+con el informe completo de la web de OpenClaw. La primera publicación utiliza el informe existente más
 reciente; no genera uno nuevo ni elimina secciones antiguas de su texto.
 
 ## 3. Crear el dashboard
@@ -111,7 +112,7 @@ editor de configuración sin procesar y pega `integrations/homeassistant/dashboa
 Úsalo en un panel nuevo: no reemplaces el YAML de tu panel habitual.
 
 El panel utiliza únicamente tarjetas Markdown nativas. Muestra el texto completo
-del campo `summary` recibido, sin interpretar su contenido como instrucciones.
+de la respuesta final exportada, sin interpretar su contenido como instrucciones.
 Incluye un aviso si el informe tiene más de 30 horas o la última ejecución fue
 `error`/`skipped`. Una ejecución correcta significa que el informe se generó,
 no que el homelab carezca de incidencias: lee el diagnóstico.
@@ -145,10 +146,11 @@ journalctl -u homelab-report-publisher.service -n 30 --no-pager
 - HTTP 401: el token no coincide. HTTP 503: falta el token en Node-RED o falla
   el nodo de Home Assistant; comprueba Companion y la conexión del Sensor.
 - HTTP 404: comprueba puerto, prefijo HTTP, ruta y que el flujo esté desplegado.
-- Sin `summary` correcto en las últimas 20 ejecuciones: no se sobrescribe el
+- Sin ejecución correcta en las últimas 20 entradas o sin una respuesta final
+  identificable en su sesión exportada: no se sobrescribe el
   sensor. Se conserva el informe anterior y su fecha permite detectar antigüedad.
 - Informe superior a 32 KiB: se rechaza, no se trunca. Ajusta la concisión del
-  informe si ocurre. No recupera partes ya truncadas por OpenClaw en `summary`.
+  informe si ocurre. El límite se aplica a la respuesta completa, no al resumen.
 - El estado de la última ejecución se calcula dentro de las últimas 20 entradas.
   Si la CLI cambia el formato JSON, el publicador falla y deja el informe previo.
 - Los logs del publicador no imprimen el informe ni el token. No conectes un
@@ -169,6 +171,41 @@ systemctl disable --now homelab-report-publisher.timer
 Después puedes deshabilitar la pestaña importada en Node-RED. La automatización
 original y la entrega en OpenClaw permanecen operativas.
 
+
+## Actualizar el publicador que enviaba informes recortados
+
+En OpenClaw 2026.9.4, `automations runs` puede devolver un `summary` que termina
+con puntos suspensivos antes de las secciones finales. El nuevo publicador:
+
+- Busca la sesión del agente `homelab-observer` por el `sessionId` de la ejecución.
+  Usa su clave real aunque el historial devuelva una clave con sufijo `:run:…`.
+- Exporta la sesión mediante `sessions export-trajectory --json`.
+- Selecciona el último evento `assistant.message` con `stopReason: stop`,
+  de esa sesión y dentro del intervalo entre `runAtMs` y `ts`.
+- Envía solo sus bloques de texto, con la redacción que aplique el exportador.
+  No publica razonamiento, resultados de herramientas ni eventos internos.
+- Borra su exportación temporal al terminar, también si falla. No toca otras
+  exportaciones ni las bases de datos. Si no puede identificar el informe, falla
+  y conserva el sensor anterior; nunca usa el resumen recortado como alternativa.
+
+Para actualizar una instalación existente:
+
+```bash
+cd /root/homelab-ai
+git pull --ff-only
+bash scripts/05-publicar-informe-ha.sh
+```
+
+La salida debe incluir `published: true`, `report_source: "trajectory"` y
+`report_chars`. Comprueba que el panel incluye Home Assistant y las recomendaciones.
+No necesitas regenerar el informe, reiniciar OpenClaw, reimportar Node-RED ni
+cambiar el YAML. El temporizador utiliza automáticamente el código actualizado.
+La fecha del informe se conserva aunque ahora se publique el contenido completo.
+
+La exportación necesita espacio temporal dentro del contenedor. Un archivo de
+eventos superior a 32 MiB se rechaza. Si el identificador de la ejecución ya no
+está entre las sesiones guardadas, no se usa una conversación distinta.
+
 ## Validación
 
 Pruebas locales con historial ficticio y receptor HTTP local:
@@ -179,6 +216,8 @@ node --test integrations/homeassistant/report-publisher.test.mjs
 
 Verifican selección del último informe, cifras y saltos de línea, autenticación,
 límites, rechazo de IDs ajenos, errores HTTP y confirmación de publicación.
+También cubren resumen truncado, texto completo con logs HA, resolución de sesión,
+exclusión de otras ejecuciones y limpieza de las exportaciones temporales.
 No sustituyen la prueba real de importación con tu versión de Node-RED, Companion
 y Home Assistant; esa validación queda pendiente del despliegue.
 
