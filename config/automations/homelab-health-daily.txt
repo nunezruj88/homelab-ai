@@ -4,12 +4,14 @@ FORMATO OBLIGATORIO
 Devuelve Markdown sin envolver el informe en un bloque de código. Utiliza exactamente dos encabezados de nivel 2, en este orden y escritos literalmente en una línea independiente:
 ## Proxmox
 ## Home Assistant
-Deja una línea en blanco después de cada encabezado. No añadas emojis, numeración ni texto extra a esos dos encabezados. Empieza directamente con ## Proxmox. Usa encabezados de nivel 3 (###) para las subsecciones. No crees una tercera sección global ni añadas contenido después de finalizar Home Assistant. Incluye las recomendaciones de cada sistema dentro de su propia sección.
+Deja una línea en blanco después de cada encabezado. No añadas emojis, numeración ni texto extra a esos dos encabezados. Empieza directamente con ## Proxmox. Usa encabezados de nivel 3 (###) para las subsecciones. No crees una tercera sección global ni añadas contenido después de finalizar Home Assistant. Incluye las recomendaciones de cada sistema dentro de su propia sección. No incluyas el antiguo Resumen del estado ni un resumen narrativo inicial. Mantén literalmente los encabezados ### Tabla de nodos, ### Estado general, ### Tablas de logs y ### Cobertura del análisis: los sensores los utilizan como delimitadores.
 
 PROXMOX
 Dentro de ## Proxmox incluye:
-### Resumen del estado
-Empieza con "**Estado:** Correcto / Atención / Crítico / No evaluable", eligiendo una sola categoría según los datos. Indica fecha y hora del análisis. Resume en 2-4 frases la disponibilidad de nodos y cargas, almacenamiento, backups y la incidencia más importante, indicando cifras solo cuando estén verificadas. No clasifiques el conjunto como correcto solo porque los nodos estén online si hay backups fallidos u otros problemas relevantes. Si faltan datos esenciales, usa No evaluable o indica explícitamente la cobertura parcial junto al estado sustentado por los datos.
+### Tabla de nodos
+Incluye únicamente una tabla Markdown con una fila por cada nodo del inventario, también si está offline, y estas columnas exactas:
+| Nodo | CPU (%) | RAM (%) | VM running | VM stopped | VM paused | VM otros/desconocidos | LXC running | LXC stopped | LXC paused | LXC otros/desconocidos |
+Consulta las métricas de los nodos y el inventario completo de VMs y LXC. CPU y RAM son el porcentaje de uso del nodo; convierte fracciones a porcentajes solo si la API devuelve fracciones. Cuenta las cargas de cada nodo por tipo y por su estado real. Cada carga cuenta una sola vez. No deduzcas su estado a partir del nombre ni confundas VM con LXC. Incluye todos los estados restantes en otros/desconocidos y aclara cuáles aparecen en el detalle posterior. Usa 0 solo si el inventario consultado confirma ausencia; si faltan datos o el inventario es parcial, escribe N/D en los recuentos no verificables. Usa N/D para métricas actuales no disponibles, especialmente nodos offline. No inventes cifras.
 ### Estado general
 Detalla nodos y disponibilidad. Distingue datos confirmados de información no disponible.
 ### Nodos y VMs/LXC
@@ -23,8 +25,12 @@ Ordena las acciones de Proxmox por prioridad, sin ejecutarlas.
 
 HOME ASSISTANT
 Dentro de ## Home Assistant incluye:
-### Resumen del estado
-Empieza con "**Estado según los logs:** Sin incidencias detectadas / Atención / Crítico / No evaluable", eligiendo una sola categoría. Resume en 2-4 frases los errores y advertencias relevantes, las integraciones afectadas, su impacto confirmado y la prioridad de revisión. Basa este resumen en los registros realmente consultados. No equipares ausencia de errores en una muestra con salud completa de Home Assistant ni deduzcas disponibilidad de todos sus dispositivos a partir de los logs. Si no puedes acceder a los registros, indica No evaluable. Si la cobertura es parcial, indícalo junto al estado; no inventes cifras ni impactos.
+### Tablas de logs
+Incluye exactamente dos tablas Markdown, una para errores y otra para warnings. Cada tabla contiene una fila Total y hasta tres filas con los mensajes más repetidos, ordenados por número de apariciones descendente. Usa estas columnas:
+| Errores | Integración / mensaje | Apariciones |
+| Warnings | Integración / mensaje | Apariciones |
+En la primera columna escribe Total, Top 1, Top 2 y Top 3 según corresponda. En la fila Total, la segunda columna debe identificar la ventana temporal y cobertura (completa o muestra parcial); la tercera indica el total de apariciones de esa severidad en esa misma cobertura, incluyendo todos los mensajes, no solo los tres primeros. En cada Top indica integración y un mensaje breve sin secretos; escapa caracteres de barra vertical dentro de las celdas. Si hay menos de tres mensajes distintos, no inventes filas adicionales.
+Calcula totales y ranking solo con registros o contadores verificables. No sumes registros duplicados al consultar source=system y source=error_log; elige una fuente para los conteos e indica cuál en cada fila Total. No confundas cantidad de mensajes distintos con total de apariciones. Si solo hay una muestra, etiqueta sus conteos como muestra, sin extrapolar al total diario. Si los contadores son acumulados y no tienen ventana verificable, indica acumulado, periodo desconocido. Si no puedes obtener frecuencias fiables, escribe N/D en total y ranking y explica la limitación; no presentes una selección arbitraria como Top 3. Si no hay registros de una severidad en la cobertura consultada, incluye solo su fila Total con 0 y la cobertura, sin afirmar que no hubo incidencias fuera de esa muestra.
 ### Cobertura del análisis
 Consulta ha_get_logs con source=system para errores y advertencias; utiliza source=error_log si necesitas ampliar el diagnóstico. Indica las fuentes y fechas disponibles.
 ### Errores
