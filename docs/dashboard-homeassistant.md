@@ -258,3 +258,75 @@ Comprueba que ambas cabeceras estén presentes en el atributo `report`. Este
 contrato de formato permite a los sensores de plantilla separar el texto.
 El modelo debe respetarlo; el publicador conserva su respuesta, no inventa
 secciones ni clasifica contenido automáticamente.
+
+## Sensores de resumen tabular
+
+El resumen narrativo inicial se sustituye por tablas. El informe completo y los
+sensores de secciones completos que hayas creado anteriormente pueden conservarse.
+Estos dos sensores nuevos derivan sus atributos del mismo `sensor.homelab_informe`:
+
+- `sensor.proxmox_summary`: una tabla por nodo con CPU y RAM en porcentaje y
+  recuentos independientes de VM y LXC por estado: running, stopped, paused y otros/desconocidos.
+- `sensor.homeassistant_summary`: dos tablas, errores y warnings. Cada una tiene
+  una fila Total y hasta tres mensajes ordenados por apariciones. La fila Total
+  identifica fuente, periodo y cobertura; N/D significa que el dato no se pudo verificar.
+
+Las cifras reflejan la consulta del informe, no métricas en tiempo real. Una
+muestra parcial de logs no es el total de las últimas 24 horas. El modelo recibe
+instrucciones de no extrapolar conteos ni inventar un ranking sin frecuencias.
+Las tablas son parte de su respuesta: estos sensores separan el texto, no
+recalculan ni verifican los datos de origen.
+
+### Instalar las entidades en Home Assistant
+
+Copia el contenido de [summary-sensors.yaml](../integrations/homeassistant/summary-sensors.yaml)
+a `/config/homelab-summary-sensors.yaml` **en Home Assistant**, no en el LXC de OpenClaw.
+
+Si todavía no tienes una clave `template:`, añade al nivel principal de
+`configuration.yaml`:
+
+```yaml
+template: !include homelab-summary-sensors.yaml
+```
+
+Si ya usas `template: !include templates.yaml`, añade el contenido del archivo al
+final de esa lista existente, sin reemplazar otros sensores. Si tienes la lista
+directamente dentro de `template:`, integra el bloque `- sensor:` con dos espacios
+de sangría debajo de esa clave. No lo pegues bajo `sensor:` ni dupliques `template:`.
+El archivo descargado ya empieza por `- sensor:`; no requiere `platform`.
+
+Comprueba la configuración y recarga las entidades de plantilla. Verifica los
+IDs de las entidades creadas; si hay una colisión de nombres, ajusta los IDs o las
+referencias de las tarjetas. El estado es la fecha del informe; las tablas están
+en el atributo `report`, evitando el límite de longitud del estado.
+
+### Actualizar y publicar el informe
+
+En el LXC de OpenClaw:
+
+```bash
+cd /root/homelab-ai
+git pull --ff-only
+docker exec openclaw openclaw automations edit \
+  c2c20bac-2f48-4605-b64a-5f7dfd40c743 \
+  --message "$(cat config/automations/homelab-health-daily.txt)"
+docker exec openclaw openclaw automations run \
+  c2c20bac-2f48-4605-b64a-5f7dfd40c743 --wait
+bash scripts/05-publicar-informe-ha.sh
+```
+
+Hasta que se publique un informe nuevo con los encabezados esperados, los sensores
+figurarán como no disponibles. Los informes antiguos no se reformatean.
+No hace falta reimportar el flujo Node-RED. Si el publicador falla (por ejemplo,
+HTTP 503), resuelve ese fallo primero: las tablas no pueden actualizarse sin
+recibir el informe nuevo.
+
+### Tarjetas
+
+Añade una tarjeta Manual y pega
+[summary-cards.yaml](../integrations/homeassistant/summary-cards.yaml).
+Es una tarjeta vertical con las dos entidades, no un dashboard completo.
+Puedes usar también cada tarjeta Markdown por separado. La tabla Proxmox tiene
+muchas columnas; reserva una zona ancha del panel.
+
+Referencia: [entidades de plantilla de Home Assistant](https://www.home-assistant.io/integrations/template/).

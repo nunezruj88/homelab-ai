@@ -26,7 +26,7 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
-      - run: pip install PyYAML==6.0.2
+      - run: pip install PyYAML==6.0.2 Jinja2==3.1.6
       - name: Validate dashboard YAML
         run: |
           python - <<'PY'
@@ -35,3 +35,6 @@ jobs:
               data = yaml.safe_load(f)
           assert len(data['views'][0]['cards']) == 2
           PY
+
+      - name: Validate summary sensors and section extraction
+        run: python integrations/homeassistant/summary-sensors.test.py

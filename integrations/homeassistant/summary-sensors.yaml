@@ -1,0 +1,50 @@
+# configuration.yaml: template: !include templates.yaml
+# Si template: ya existe, integra esta entrada en su lista.
+- sensor:
+    - name: proxmox_summary
+      unique_id: homelab_proxmox_summary
+      icon: mdi:server-network
+      device_class: timestamp
+      availability: >-
+        {% set r = (state_attr('sensor.homelab_informe', 'report') or '').replace('\r\n', '\n') %}
+        {% set a = r.find('### Tabla de nodos\n') %}
+        {% set b = r.find('### Estado general\n', a + 1) %}
+        {{ states('sensor.homelab_informe') not in ['unknown', 'unavailable'] and a >= 0 and b > a and as_timestamp(state_attr('sensor.homelab_informe', 'generated_at'), none) is not none }}
+      state: "{{ state_attr('sensor.homelab_informe', 'generated_at') }}"
+      attributes:
+        report: >-
+          {% set r = (state_attr('sensor.homelab_informe', 'report') or '').replace('\r\n', '\n') %}
+          {% set start = '### Tabla de nodos\n' %}
+          {% set end = '### Estado general\n' %}
+          {% if start in r and end in r.split(start, 1)[1] %}
+            {{ r.split(start, 1)[1].split(end, 1)[0] | trim }}
+          {% else %}
+            Esperando un informe con la tabla de nodos.
+          {% endif %}
+        generated_at: "{{ state_attr('sensor.homelab_informe', 'generated_at') }}"
+        last_run_status: "{{ state_attr('sensor.homelab_informe', 'last_run_status') }}"
+        report_id: "{{ state_attr('sensor.homelab_informe', 'report_id') }}"
+
+    - name: homeassistant_summary
+      unique_id: homelab_homeassistant_summary
+      icon: mdi:home-assistant
+      device_class: timestamp
+      availability: >-
+        {% set r = (state_attr('sensor.homelab_informe', 'report') or '').replace('\r\n', '\n') %}
+        {% set a = r.find('### Tablas de logs\n') %}
+        {% set b = r.find('### Cobertura del análisis\n', a + 1) %}
+        {{ states('sensor.homelab_informe') not in ['unknown', 'unavailable'] and a >= 0 and b > a and as_timestamp(state_attr('sensor.homelab_informe', 'generated_at'), none) is not none }}
+      state: "{{ state_attr('sensor.homelab_informe', 'generated_at') }}"
+      attributes:
+        report: >-
+          {% set r = (state_attr('sensor.homelab_informe', 'report') or '').replace('\r\n', '\n') %}
+          {% set start = '### Tablas de logs\n' %}
+          {% set end = '### Cobertura del análisis\n' %}
+          {% if start in r and end in r.split(start, 1)[1] %}
+            {{ r.split(start, 1)[1].split(end, 1)[0] | trim }}
+          {% else %}
+            Esperando un informe con las tablas de errores y warnings.
+          {% endif %}
+        generated_at: "{{ state_attr('sensor.homelab_informe', 'generated_at') }}"
+        last_run_status: "{{ state_attr('sensor.homelab_informe', 'last_run_status') }}"
+        report_id: "{{ state_attr('sensor.homelab_informe', 'report_id') }}"
