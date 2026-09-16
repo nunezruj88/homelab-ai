@@ -265,9 +265,9 @@ El resumen narrativo inicial se sustituye por tablas. El informe completo y los
 sensores de secciones completos que hayas creado anteriormente pueden conservarse.
 Estos dos sensores nuevos derivan sus atributos del mismo `sensor.homelab_informe`:
 
-- `sensor.proxmox_summary`: una tabla por nodo con CPU y RAM en porcentaje y
+- `sensor.informe_proxmox_summary`: una tabla por nodo con CPU y RAM en porcentaje y
   recuentos independientes de VM y LXC por estado: running, stopped, paused y otros/desconocidos.
-- `sensor.homeassistant_summary`: dos tablas, errores y warnings. Cada una tiene
+- `sensor.informe_homeassistant_summary`: dos tablas, errores y warnings. Cada una tiene
   una fila Total y hasta tres mensajes ordenados por apariciones. La fila Total
   identifica fuente, periodo y cobertura; N/D significa que el dato no se pudo verificar.
 
@@ -330,3 +330,12 @@ Puedes usar también cada tarjeta Markdown por separado. La tabla Proxmox tiene
 muchas columnas; reserva una zona ancha del panel.
 
 Referencia: [entidades de plantilla de Home Assistant](https://www.home-assistant.io/integrations/template/).
+
+### Renombrar sensores ya instalados
+
+Se conservan los unique_id para evitar duplicados. Después de actualizar el YAML
+y recargar las plantillas, Home Assistant puede conservar los entity_id anteriores.
+En los ajustes de cada entidad cambia `sensor.proxmox_summary` a
+`sensor.informe_proxmox_summary` y `sensor.homeassistant_summary` a
+`sensor.informe_homeassistant_summary`. Actualiza también las tarjetas con
+`summary-cards.yaml`. No borres las entidades ni cambies sus unique_id.

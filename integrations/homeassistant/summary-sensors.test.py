@@ -29,7 +29,7 @@ def render(sensor, field, report, available=True):
 
 class SummaryTests(unittest.TestCase):
     def test_entity_names_and_cards(self):
-        self.assertEqual([s["name"] for s in SENSORS], ["proxmox_summary", "homeassistant_summary"])
+        self.assertEqual([s["name"] for s in SENSORS], ["informe_proxmox_summary", "informe_homeassistant_summary"])
         cards = yaml.safe_load((ROOT / "summary-cards.yaml").read_text(encoding="utf-8"))
         self.assertEqual(len(cards["cards"]), 2)
 

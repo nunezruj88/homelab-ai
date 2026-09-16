@@ -1,7 +1,7 @@
 # configuration.yaml: template: !include templates.yaml
 # Si template: ya existe, integra esta entrada en su lista.
 - sensor:
-    - name: proxmox_summary
+    - name: informe_proxmox_summary
       unique_id: homelab_proxmox_summary
       icon: mdi:server-network
       device_class: timestamp
@@ -25,7 +25,7 @@
         last_run_status: "{{ state_attr('sensor.homelab_informe', 'last_run_status') }}"
         report_id: "{{ state_attr('sensor.homelab_informe', 'report_id') }}"
 
-    - name: homeassistant_summary
+    - name: informe_homeassistant_summary
       unique_id: homelab_homeassistant_summary
       icon: mdi:home-assistant
       device_class: timestamp
