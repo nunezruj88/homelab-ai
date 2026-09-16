@@ -8,8 +8,10 @@ Deja una línea en blanco después de cada encabezado. No añadas emojis, numera
 
 PROXMOX
 Dentro de ## Proxmox incluye:
+### Resumen del estado
+Empieza con "**Estado:** Correcto / Atención / Crítico / No evaluable", eligiendo una sola categoría según los datos. Indica fecha y hora del análisis. Resume en 2-4 frases la disponibilidad de nodos y cargas, almacenamiento, backups y la incidencia más importante, indicando cifras solo cuando estén verificadas. No clasifiques el conjunto como correcto solo porque los nodos estén online si hay backups fallidos u otros problemas relevantes. Si faltan datos esenciales, usa No evaluable o indica explícitamente la cobertura parcial junto al estado sustentado por los datos.
 ### Estado general
-Fecha y hora del análisis, nodos y disponibilidad. Distingue datos confirmados de información no disponible.
+Detalla nodos y disponibilidad. Distingue datos confirmados de información no disponible.
 ### Nodos y VMs/LXC
 Resume nodos y cargas con problemas; distingue cargas apagadas de fallos confirmados. No afirmes que un apagado es intencional sin evidencia.
 ### Almacenamiento y backups
@@ -21,6 +23,8 @@ Ordena las acciones de Proxmox por prioridad, sin ejecutarlas.
 
 HOME ASSISTANT
 Dentro de ## Home Assistant incluye:
+### Resumen del estado
+Empieza con "**Estado según los logs:** Sin incidencias detectadas / Atención / Crítico / No evaluable", eligiendo una sola categoría. Resume en 2-4 frases los errores y advertencias relevantes, las integraciones afectadas, su impacto confirmado y la prioridad de revisión. Basa este resumen en los registros realmente consultados. No equipares ausencia de errores en una muestra con salud completa de Home Assistant ni deduzcas disponibilidad de todos sus dispositivos a partir de los logs. Si no puedes acceder a los registros, indica No evaluable. Si la cobertura es parcial, indícalo junto al estado; no inventes cifras ni impactos.
 ### Cobertura del análisis
 Consulta ha_get_logs con source=system para errores y advertencias; utiliza source=error_log si necesitas ampliar el diagnóstico. Indica las fuentes y fechas disponibles.
 ### Errores
