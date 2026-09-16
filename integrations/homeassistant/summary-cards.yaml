@@ -3,16 +3,16 @@ cards:
   - type: markdown
     title: Proxmox · Estado por nodo
     content: |
-      {% if states('sensor.proxmox_summary') in ['unknown', 'unavailable'] %}
+      {% if states('sensor.informe_proxmox_summary') in ['unknown', 'unavailable'] %}
       Esperando un informe con la tabla de nodos.
       {% else %}
-      {{ state_attr('sensor.proxmox_summary', 'report') }}
+      {{ state_attr('sensor.informe_proxmox_summary', 'report') }}
       {% endif %}
   - type: markdown
     title: Home Assistant · Errores y warnings
     content: |
-      {% if states('sensor.homeassistant_summary') in ['unknown', 'unavailable'] %}
+      {% if states('sensor.informe_homeassistant_summary') in ['unknown', 'unavailable'] %}
       Esperando un informe con las tablas de logs.
       {% else %}
-      {{ state_attr('sensor.homeassistant_summary', 'report') }}
+      {{ state_attr('sensor.informe_homeassistant_summary', 'report') }}
       {% endif %}
