@@ -533,8 +533,21 @@ y [proveedor NVIDIA](https://docs.openclaw.ai/providers/nvidia).
 
 La [guía del dashboard](docs/dashboard-homeassistant.md) incluye un flujo importable
 para Node-RED en `10.8.1.28`, un panel YAML y un publicador que consulta el último
-informe existente cada cinco minutos. Reutiliza la conexión de Node-RED a Home
+informe existente cada hora. Reutiliza la conexión de Node-RED a Home
 Assistant y requiere Node-RED Companion para crear el sensor.
+
+La generación diaria y la publicación son independientes: hay que instalar y
+activar `homelab-report-publisher.timer` en el LXC. Cada hora vuelve a enviar el
+último informe, aunque ya se haya publicado; conserva su fecha y no vuelve a
+llamar al modelo. Para enviarlo inmediatamente:
+
+```bash
+cd /root/homelab-ai
+bash scripts/05-publicar-informe-ha.sh
+```
+
+La guía incluye la instalación del servicio, el cambio de cinco minutos a una
+hora y la comprobación del temporizador.
 
 Muestra el informe de Proxmox y logs de Home Assistant, su fecha y avisos de
 antigüedad o de ejecución fallida. Conserva la entrega en la web de OpenClaw y no

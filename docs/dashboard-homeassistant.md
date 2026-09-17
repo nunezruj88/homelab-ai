@@ -3,7 +3,7 @@
 ## Qué hace
 
 OpenClaw genera `homelab-health-daily` con Proxmox y logs de Home Assistant.
-Un publicador consulta cada cinco minutos el historial existente mediante la CLI
+Un publicador consulta cada hora el historial existente mediante la CLI
 y exporta la sesión de la última ejecución correcta para enviar su respuesta final
 completa a Node-RED. No utiliza `summary`, que OpenClaw puede recortar. Node-RED actualiza un único sensor
 y el dashboard muestra su texto y fecha. No se vuelve a ejecutar el modelo.
@@ -132,10 +132,47 @@ systemctl start homelab-report-publisher.service
 systemctl list-timers homelab-report-publisher.timer
 ```
 
-El informe nuevo aparecerá en el siguiente ciclo, en unos cinco minutos como
-máximo más el tiempo de consulta. Las publicaciones repetidas conservan la fecha
+El temporizador del repositorio hace un primer intento dos minutos después del
+arranque del LXC (o al activarse si ese plazo ya pasó) y después publica cada hora
+mediante `OnUnitActiveSec=1h`, no necesariamente a la hora en punto.
+El informe nuevo aparecerá en el siguiente ciclo, aproximadamente en una hora
+más el tiempo de consulta si el servicio está operativo. Las publicaciones repetidas conservan la fecha
 original y reponen el sensor después de reiniciar Node-RED. No hay llamadas
 adicionales al modelo. El temporizador no altera la hora del informe diario.
+
+### Cambiar una instalación anterior a publicación cada hora
+
+Actualizar el repositorio no sustituye las unidades ya copiadas a systemd.
+En el LXC, actualiza el temporizador instalado y reinícialo:
+
+```bash
+cd /root/homelab-ai
+git pull --ff-only
+install -m 644 integrations/homeassistant/homelab-report-publisher.timer /etc/systemd/system/
+systemctl daemon-reload
+systemctl restart homelab-report-publisher.timer
+systemctl list-timers --all homelab-report-publisher.timer
+```
+
+Si todavía no existen el servicio y el temporizador, sigue la instalación completa
+del apartado anterior. La generación diaria de OpenClaw no instala estas unidades.
+
+Si ya aplicaste un override con `OnUnitActiveSec=1h`, puedes conservarlo.
+Ese override tiene prioridad sobre el archivo del repositorio; si también vacía
+`OnBootSec`, no incluye el intento inicial a los dos minutos. Comprueba la
+configuración combinada con:
+
+```bash
+systemctl cat homelab-report-publisher.timer
+```
+
+Cada ciclo vuelve a enviar el último informe, aunque no haya uno nuevo. No genera
+otro informe ni cambia su fecha. Para forzar una publicación inmediata:
+
+```bash
+cd /root/homelab-ai
+bash scripts/05-publicar-informe-ha.sh
+```
 
 ## Diagnóstico y límites
 
