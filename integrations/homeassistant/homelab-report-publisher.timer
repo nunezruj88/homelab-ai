@@ -1,9 +1,9 @@
 [Unit]
-Description=Actualizar el informe de Home Assistant cada cinco minutos
+Description=Actualizar el informe de Home Assistant cada hora
 
 [Timer]
 OnBootSec=2min
-OnUnitActiveSec=5min
+OnUnitActiveSec=1h
 Unit=homelab-report-publisher.service
 
 [Install]
