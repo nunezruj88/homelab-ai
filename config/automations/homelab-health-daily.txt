@@ -1,10 +1,11 @@
 Genera un informe diario de salud del homelab en español usando únicamente herramientas de lectura.
 
 FORMATO OBLIGATORIO
-Devuelve Markdown sin envolver el informe en un bloque de código. Utiliza exactamente dos encabezados de nivel 2, en este orden y escritos literalmente en una línea independiente:
+Devuelve Markdown sin envolver el informe en un bloque de código. Utiliza exactamente tres encabezados de nivel 2, en este orden y escritos literalmente en una línea independiente:
 ## Proxmox
 ## Home Assistant
-Deja una línea en blanco después de cada encabezado. No añadas emojis, numeración ni texto extra a esos dos encabezados. Empieza directamente con ## Proxmox. Usa encabezados de nivel 3 (###) para las subsecciones. No crees una tercera sección global ni añadas contenido después de finalizar Home Assistant. Incluye las recomendaciones de cada sistema dentro de su propia sección. No incluyas el antiguo Resumen del estado ni un resumen narrativo inicial. Mantén literalmente los encabezados ### Tabla de nodos, ### Estado general, ### Tablas de logs y ### Cobertura del análisis: los sensores los utilizan como delimitadores.
+## TrueNAS
+Deja una línea en blanco después de cada encabezado. No añadas emojis, numeración ni texto extra a esos tres encabezados. Empieza directamente con ## Proxmox. Usa encabezados de nivel 3 (###) para las subsecciones. No crees otra sección global ni añadas contenido después de finalizar TrueNAS. Incluye las recomendaciones de cada sistema dentro de su propia sección. No incluyas el antiguo Resumen del estado ni un resumen narrativo inicial. Mantén literalmente los encabezados ### Tabla de nodos, ### Estado general, ### Tablas de logs y ### Cobertura del análisis: los sensores los utilizan como delimitadores.
 
 PROXMOX
 Dentro de ## Proxmox incluye:
@@ -41,5 +42,14 @@ Categoriza las advertencias y sus posibles efectos, diferenciando hechos de hip�
 Prioriza las últimas 24 horas. No presentes contadores acumulados como recuentos diarios ni una consulta incompleta como ausencia de errores. Si no puedes consultar los logs, conserva esta sección y explica qué datos faltan.
 ### Acciones recomendadas
 Ordena las acciones de Home Assistant por prioridad, sin ejecutarlas.
+
+TRUENAS
+Dentro de ## TrueNAS, consulta truenas get_health una sola vez:
+### Pools y capacidad
+Incluye una tabla con pool, estado, capacidad total, espacio usado, espacio libre y porcentaje de uso. Conserva N/D para métricas ausentes. Resalta pools no ONLINE y uso superior al 80 %. No confundas ONLINE con ausencia de problemas.
+### Alertas
+Resume las clases de alertas y su gravedad, separando las descartadas (dismissed) de las no descartadas. La herramienta no devuelve texto libre de las alertas: no inventes mensajes ni causas específicas a partir de la clase.
+### Cobertura y recomendaciones
+Indica collected_at y los query_errors. Si alerts es null, no afirmes que no hay alertas. Explica si una lista está truncada. No se comprueban directamente SMART, scrubs, snapshots ni replicaciones: no afirmes que los backups son correctos. Si TrueNAS no está disponible o el MCP no está instalado, conserva esta sección y explica que no pudo evaluarse. Propón acciones sin ejecutarlas.
 
 No consultes Grafana. No ejecutes cambios ni borres logs. Omite secretos y datos sensibles. Conserva las cifras verificadas. Si faltan herramientas o datos, indícalo en la sección correspondiente.

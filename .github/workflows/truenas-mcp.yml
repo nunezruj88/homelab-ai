@@ -1,0 +1,22 @@
+name: truenas-mcp
+on:
+  pull_request:
+    paths: ['docker/truenas-mcp/**', '.github/workflows/truenas-mcp.yml']
+  push:
+    branches: [main]
+    paths: ['docker/truenas-mcp/**', '.github/workflows/truenas-mcp.yml']
+permissions:
+  contents: read
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate Compose
+        env:
+          TRUENAS_URL: wss://192.0.2.12/api/current
+        run: docker compose -f docker/truenas-mcp/docker-compose.yml config --quiet
+      - name: Build image
+        run: docker build -t truenas-mcp-test docker/truenas-mcp
+      - name: Test API boundaries and MCP protocol
+        run: docker run --rm -e PYTHONPATH=/app -v "$PWD/docker/truenas-mcp/test_server.py:/tests/test_server.py:ro" truenas-mcp-test python /tests/test_server.py

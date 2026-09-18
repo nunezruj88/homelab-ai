@@ -25,7 +25,7 @@ const updates = agents.map(agent => {
   const tools = structuredClone(config[id]?.tools ?? {});
   if (id === 'homelab-observer') {
     // Conserva el contrato de solo lectura de la automatización diaria.
-    tools.allow = ['proxmox__*', 'homeassistant__ha_get_logs', 'session_status'];
+    tools.allow = ['proxmox__*', 'homeassistant__ha_get_logs', 'truenas__get_health', 'session_status'];
     delete tools.alsoAllow;
   } else {
     const field = Array.isArray(tools.allow) ? 'allow' : 'alsoAllow';
