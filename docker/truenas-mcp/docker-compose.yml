@@ -1,0 +1,31 @@
+services:
+  truenas-mcp:
+    build: .
+    container_name: truenas-mcp
+    restart: unless-stopped
+    environment:
+      TRUENAS_URL: ${TRUENAS_URL:?Configura TRUENAS_URL}
+      TRUENAS_VERIFY_SSL: ${TRUENAS_VERIFY_SSL:-true}
+    volumes:
+      - ${TRUENAS_SECRET_DIR:-/etc/homelab-truenas-mcp}:/run/secrets:ro
+    expose:
+      - "8000"
+    read_only: true
+    tmpfs:
+      - /tmp
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    mem_limit: 256m
+    pids_limit: 64
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/healthz', timeout=3)"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+    networks:
+      - mcp-net
+networks:
+  mcp-net:
+    external: true

@@ -9,3 +9,15 @@ servers:
     policy:
       approval: auto
       writes: forbidden
+  truenas:
+    optional: true
+    transport: streamable-http
+    url: http://truenas-mcp:8000/mcp
+    risk: read
+    authentication: network-boundary
+    health: http://truenas-mcp:8000/healthz
+    policy:
+      approval: auto
+      writes: forbidden
+    tools:
+      - get_health

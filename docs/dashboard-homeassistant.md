@@ -267,7 +267,9 @@ Referencias: [nodo Sensor](https://zachowj.github.io/node-red-contrib-home-assis
 ## Separar el informe por sistema
 
 El mensaje versionado en `config/automations/homelab-health-daily.txt` exige
-exactamente `## Proxmox` y `## Home Assistant`, sin emojis en esos encabezados.
+exactamente `## Proxmox`, `## Home Assistant` y `## TrueNAS`, sin emojis en esos encabezados.
+La [integración TrueNAS](truenas-mcp.md) es opcional; sin ella se indica cobertura no disponible.
+Las tarjetas de secciones completas deben terminar Home Assistant antes de `## TrueNAS`.
 Cada sección contiene sus propias recomendaciones y subsecciones de nivel 3.
 Si falta información, se conserva el encabezado y se explica la limitación.
 

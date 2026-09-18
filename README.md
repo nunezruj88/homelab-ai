@@ -562,10 +562,18 @@ de todos los agentes de una instalación anterior, sigue la
 [guía de retirada](docs/retirar-grafana-mcp.md). Actualizar el repositorio por sí solo
 no elimina el registro guardado en OpenClaw.
 
+## 16. TrueNAS en el informe (opcional)
+
+La [guía de TrueNAS](docs/truenas-mcp.md) permite añadir pools, capacidad y alertas
+al informe mediante un MCP de solo lectura. Incluye el despliegue en Docker,
+credenciales separadas y la actualización de la automatización existente.
+El informe incorpora una tercera sección principal, `## TrueNAS`.
+Si el servicio no está instalado, el informe indicará que no se pudo evaluar.
+
 ## Checklist
 
 - [ ] LXC, Docker, `ia-net` y `mcp-net` operativos.
-- [ ] Secretos reales únicamente en `config/secrets/runtime.env`.
+- [ ] Secretos reales fuera del repositorio: `runtime.env` y archivos dedicados por servicio.
 - [ ] Token Proxmox dedicado, `privsep=1` y `PVEAuditor` efectivo.
 - [ ] Proxmox MCP anuncia `risk=read`.
 - [ ] OpenClaw no tiene montado `/var/run/docker.sock`.
@@ -612,8 +620,8 @@ OpenAI para esta configuración.
 docker exec openclaw openclaw config get agents.entries.homelab-observer.tools
 ```
 
-La lista `allow` debe contener exclusivamente `proxmox__*`, `homeassistant__ha_get_logs` y
-`session_status`. Esta consulta verifica la configuración del agente;
+La lista `allow` debe contener exclusivamente `proxmox__*`, `homeassistant__ha_get_logs`,
+`truenas__get_health` (integración opcional) y `session_status`. Esta consulta verifica la configuración del agente;
 `sandbox explain` muestra otra capa y no sustituye esta comprobación.
 El informe manual se ha probado con éxito. La lista no concede herramientas de
 memoria al observador aunque sus archivos estén indexados. Verificar la ejecución

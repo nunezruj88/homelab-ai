@@ -25,11 +25,11 @@ fi
 
 # Allowlist absoluta: sin shell, filesystem, navegador, mensajería ni MCP ajenos.
 docker exec openclaw openclaw config set --batch-json \
-  "[{\"path\":\"agents.entries.${AGENT_ID}.tools\",\"value\":{\"allow\":[\"proxmox__*\",\"homeassistant__ha_get_logs\",\"session_status\"]}}]"
+  "[{\"path\":\"agents.entries.${AGENT_ID}.tools\",\"value\":{\"allow\":[\"proxmox__*\",\"homeassistant__ha_get_logs\",\"truenas__get_health\",\"session_status\"]}}]"
 
 if docker exec openclaw openclaw automations list --all --json | grep -q "$JOB_NAME"; then
   echo ">> La automatización $JOB_NAME ya existe; se conserva su horario, mensaje y entrega."
-  echo ">> Los permisos del observador se han ajustado a Proxmox y lectura de logs HA."
+  echo ">> Los permisos del observador se han ajustado a Proxmox, lectura de logs HA y consulta de salud TrueNAS."
   exit 0
 fi
 
