@@ -1,12 +1,14 @@
 # Homelab IA
 
-Stack de IA agentic autoalojado sobre Proxmox. OpenClaw usa Kimi/Moonshot como
-modelo y consume Proxmox, Home Assistant y Node-RED mediante MCP.
+Stack de IA autoalojado sobre Proxmox. OpenClaw se organiza en dos agentes:
+**Conchi** para las conversaciones y **homelab-observer** para el informe diario.
+Ambos pueden utilizar Moonshot, Cloudflare, NVIDIA y OpenAI; sus permisos de
+herramientas son distintos. Node-RED publica el informe en Home Assistant.
 
 ```text
 OpenClaw ── MCP HTTP ────┬─ Proxmox MCP (solo lectura) ── Proxmox API
                          ├─ Home Assistant MCP
-                         └─ Node-RED MCP
+                         └─ TrueNAS MCP (solo lectura, opcional)
 ```
 
 OpenClaw no tiene acceso al socket Docker. Proxmox MCP funciona como servicio
@@ -249,7 +251,7 @@ scripts/04-crear-automatizaciones.sh
 
 Crea `homelab-health-daily` a las 08:00 de `AUTOMATION_TZ`. Se ejecuta en una
 sesión aislada mediante el agente `homelab-observer`. Su allowlist contiene
-únicamente `proxmox__*`, `homeassistant__ha_get_logs` y `session_status`: no dispone de shell,
+únicamente `proxmox__*`, `homeassistant__ha_get_logs`, `truenas__get_health` y `session_status`: no dispone de shell,
 filesystem, navegador, mensajería ni otros MCP. No entrega resultados fuera de
 OpenClaw hasta que se configure un destino explícito.
 
@@ -292,7 +294,7 @@ y [componente personalizado](https://github.com/homeassistant-ai/ha-mcp/blob/mas
 
 HA-MCP puede ofrecer herramientas de control y escritura. Registrar el servidor
 no lo convierte en solo lectura. El agente `homelab-observer` conserva su lista
-limitada a Proxmox, `homeassistant__ha_get_logs` y `session_status`.
+limitada a Proxmox, `homeassistant__ha_get_logs`, `truenas__get_health` y `session_status`.
 
 ### Node-RED
 
@@ -364,170 +366,131 @@ Para versiones posteriores, elige explícitamente una versión publicada y revis
 sus notas antes de repetir el proceso. Si una actualización migra los datos,
 volver a una imagen anterior puede no ser suficiente: conserva la copia previa.
 
-## 13. Añadir nuevos agentes
+## 13. Agentes: Conchi y homelab-observer
 
-Un agente tiene su propio identificador, workspace, credenciales e historial.
-El proveedor define la conexión API; la referencia del modelo combina
-`PROVEEDOR/ID_DEL_MODELO`. Varios agentes pueden utilizar el mismo proveedor.
-El nombre visible del agente y el alias del modelo son etiquetas distintas.
+La organización del homelab utiliza dos agentes. Los proveedores y modelos se
+seleccionan dentro de cada agente; no se crea un agente por proveedor.
 
-Ejemplos de esta instalación:
-
-| Agente (ID interno) | Proveedor | Referencia del modelo | Uso |
+| Nombre | ID | Función | Herramientas permitidas |
 | --- | --- | --- | --- |
-| `main` | `moonshot` | `moonshot/kimi-k2.6` | Chat principal |
-| `homelab-observer` | Según su configuración | Consultar con `config get agents.entries.homelab-observer.model` | Informe de salud |
-| `cloudflare-test` | `cloudflare-test` | `cloudflare-test/@cf/qwen/qwen3-30b-a3b-fp8` | Qwen mediante adaptador; nombre visible configurable como `cloudflare` |
-| `nvidia` | `nvidia` | `nvidia/nvidia/nemotron-3.5-lightning-30b-a3b` | Nemotron mediante NVIDIA |
+| Conchi | `conchi` | Conversaciones y consultas del homelab | `proxmox__*`, `homeassistant__*`, `truenas__get_health`, `session_status` |
+| homelab-observer | `homelab-observer` | Informe diario y automatización de salud | `proxmox__*`, `homeassistant__ha_get_logs`, `truenas__get_health`, `session_status` |
 
-El doble `nvidia/nvidia/` es correcto: el segundo `nvidia/` pertenece al ID
-del modelo. La API directa de Lightning respondió correctamente; comprueba
-por separado su ejecución con herramientas desde OpenClaw.
+Proxmox y TrueNAS mantienen sus servidores de solo lectura.
+`homeassistant__*` permite a Conchi las herramientas de control que ofrezca HA-MCP;
+el observador solo consulta sus logs. Compartir proveedores no amplía permisos.
+TrueNAS es opcional y se despliega según el punto 16.
 
-### 1. Elegir y configurar el proveedor
+### Crear Conchi
 
-Ejecuta los comandos en el LXC. Consulta primero los agentes existentes:
-
-```bash
-docker exec openclaw openclaw agents list
-```
-
-Si el proveedor ya funciona, reutilízalo. Para una instalación nueva de NVIDIA:
+Comprueba primero `docker exec openclaw openclaw agents list --json`.
+Ejecuta el alta únicamente si `conchi` todavía no existe:
 
 ```bash
-docker exec openclaw openclaw config set --batch-json \
-  '[{"path":"models.providers.nvidia","value":{"baseUrl":"https://integrate.api.nvidia.com/v1","api":"openai-completions","models":[{"id":"nvidia/nemotron-3.5-lightning-30b-a3b","name":"Nemotron 3.5 Lightning","input":["text"],"contextWindow":1048576,"maxTokens":16384}]}}]'
-```
-
-Este bloque reemplaza la configuración del proveedor `nvidia`: si ya tiene otros
-modelos u opciones, consérvalos al editarlo. No deduzcas la disponibilidad por el
-nombre: prueba el ID exacto con tu cuenta. Kimi K2.6 devolvió HTTP 404 desde NVIDIA
-en esta instalación, aunque figuraba en su catálogo.
-
-Cloudflare utiliza `http://cloudflare-adapter:8080/v1` como base URL. Despliega
-primero el [adaptador](docs/cloudflare-adapter.md); la conexión directa no incluye
-las correcciones de contenido nulo y cifras en streaming.
-
-### 2. Añadir el modelo al selector web
-
-```bash
-docker exec openclaw openclaw config set agents.defaults.models \
-  '{"nvidia/nvidia/nemotron-3.5-lightning-30b-a3b":{"alias":"NVIDIA Lightning"}}' \
-  --strict-json --merge
-```
-
-`--merge` conserva las entradas existentes. El equivalente para Cloudflare es:
-
-```bash
-docker exec openclaw openclaw config set agents.defaults.models \
-  '{"cloudflare-test/@cf/qwen/qwen3-30b-a3b-fp8":{"alias":"Cloudflare Qwen"}}' \
-  --strict-json --merge
-```
-
-### 3. Crear el agente y guardar su clave
-
-Ejecuta `agents add` solo si ese ID todavía no existe:
-
-```bash
-docker exec openclaw openclaw agents add nvidia \
-  --workspace /home/node/.openclaw/workspace-nvidia \
-  --model nvidia/nvidia/nemotron-3.5-lightning-30b-a3b \
+docker exec openclaw openclaw agents add conchi \
+  --workspace /home/node/.openclaw/workspace-conchi \
+  --model moonshot/kimi-k2.6 \
   --non-interactive
 
-docker exec -it openclaw openclaw models auth paste-api-key \
-  --provider nvidia --agent nvidia
-```
-
-Pega la clave cuando se solicite; no la escribas como argumento ni la guardes
-en el repositorio. Si seleccionas el modelo desde otro agente, ese agente
-también debe disponer de autenticación para el proveedor.
-
-Para crear Cloudflare desde cero, el bloque equivalente es:
-
-```bash
-docker exec openclaw openclaw agents add cloudflare-test \
-  --workspace /home/node/.openclaw/workspace-cloudflare-test \
-  --model cloudflare-test/@cf/qwen/qwen3-30b-a3b-fp8 \
-  --non-interactive
-
-docker exec -it openclaw openclaw models auth paste-api-key \
-  --provider cloudflare-test --agent cloudflare-test
-```
-
-Para cambiar el modelo de un agente existente, no vuelvas a crearlo:
-
-```bash
-docker exec openclaw openclaw config set --batch-json \
-  '[{"path":"agents.entries.nvidia.model","value":"nvidia/nvidia/nemotron-3.5-lightning-30b-a3b"}]'
-```
-
-### 4. Limitar las herramientas y verificar
-
-Ejemplo para NVIDIA; usa `agents.entries.cloudflare-test.tools` para Cloudflare:
-
-```bash
-docker exec openclaw openclaw config set --batch-json \
-  '[{"path":"agents.entries.nvidia.tools","value":{"allow":["proxmox__*","homeassistant__*","session_status"]}}]'
-
-docker restart openclaw
-docker exec openclaw openclaw config get agents.entries.nvidia.tools
-
-docker exec -it openclaw openclaw agent \
-  --agent nvidia \
-  --session-id "$(cat /proc/sys/kernel/random/uuid)" \
-  --message "Sin usar herramientas, copia exactamente: CPU 12.34%, RAM 56.78%, nodos 4."
-```
-
-Esta lista permite Proxmox y Home Assistant. Proxmox conserva su modo de solo
-lectura. `homeassistant__*` incluye las herramientas de control que ofrezca HA-MCP;
-el observador diario usa únicamente `homeassistant__ha_get_logs`.
-
-Después abre una sesión nueva del agente en la web y solicita:
-
-> Consulta los nodos de Proxmox y su almacenamiento. Resume sus
-> datos reales, indica qué información no has podido consultar y no ejecutes cambios.
-
-Contrasta las cifras con la interfaz de Proxmox. Un saludo correcto
-no demuestra todavía que funcionen las llamadas MCP.
-
-### Aplicar Proxmox y Home Assistant a todos los agentes existentes
-
-Con ambos servidores registrados y funcionando, ejecuta:
-
-```bash
-scripts/06-habilitar-mcps-agentes.sh
-```
-
-El script descubre todos los agentes, incluidos main, cloudflare-test, nvidia y
-openai. Añade `proxmox__*` y `homeassistant__*` conservando los demás permisos,
-modelos y credenciales. Si no hay allowlist explícita, utiliza `alsoAllow`.
-Para homelab-observer mantiene Proxmox, lectura de logs HA y session_status.
-No crea servidores ni solicita sus secretos; reutiliza los registros existentes.
-
-La política de Home Assistant de los agentes de chat incluye herramientas de
-control. Las restricciones deny, globales, por proveedor y del sandbox siguen
-vigentes: si un agente no ve los MCP, revisa esas capas antes de ampliarlas.
-Abre una sesión nueva y pide una consulta de lectura a Proxmox y Home Assistant.
-Repite el script cuando añadas otro agente.
-
-Referencia: [política de herramientas](https://docs.openclaw.ai/gateway/config-tools/tool-policy).
-
-### 5. Cambiar el nombre visible
-
-Para mostrar `cloudflare` conservando el agente actual:
-
-```bash
 docker exec openclaw openclaw agents set-identity \
-  --agent cloudflare-test --name "cloudflare"
+  --agent conchi --name "Conchi"
+
+docker exec openclaw openclaw config set --batch-json \
+  '[{"path":"agents.entries.conchi.tools","value":{"allow":["proxmox__*","homeassistant__*","truenas__get_health","session_status"]}}]'
 ```
 
-Recarga la web. El ID interno sigue siendo `cloudflare-test`; los comandos,
-credenciales, workspace y referencia del modelo mantienen ese identificador.
-Este comando no migra ni renombra el ID interno.
+El script 04 crea el observador si falta y conserva la automatización existente.
+En instalaciones nuevas, el onboarding puede crear un agente inicial: no lo
+retires hasta verificar las credenciales y dependencias de los dos agentes.
+Esta documentación describe la organización deseada; actualizar el repositorio
+no elimina agentes ni migra bases de datos del LXC.
+
+### Modelos compartidos
+
+Estas son las referencias registradas en el homelab; conserva los identificadores
+que ya funcionan en tu configuración:
+
+| Proveedor | Referencia del modelo | Alias |
+| --- | --- | --- |
+| Moonshot | `moonshot/kimi-k2.6` | Kimi K2.6 |
+| Cloudflare | `cloudflare-test/@cf/qwen/qwen3-30b-a3b-fp8` | Cloudflare Qwen |
+| NVIDIA | `nvidia/nemotron-3.5-lightning-30b-a3b` | NVIDIA Lightning |
+| OpenAI | `openai/gpt-5.6-luna` | GPT-5.6 Luna |
+
+`cloudflare-test` sigue siendo el ID del proveedor, no un agente que haya que
+crear. Cloudflare utiliza el [adaptador](docs/cloudflare-adapter.md).
+Los identificadores y disponibilidad dependen del proveedor y de la cuenta:
+no reconstruyas un proveedor que ya funciona a partir del nombre comercial.
+Otros alias históricos en el catálogo no implican disponibilidad confirmada.
+
+El catálogo compartido está en `agents.defaults.models`. Para añadir un alias
+sin reemplazar los existentes:
+
+```bash
+docker exec openclaw openclaw config set agents.defaults.models \
+  '{"moonshot/kimi-k2.6":{"alias":"Kimi K2.6"}}' --strict-json --merge
+```
+
+Moonshot es el modelo inicial. Para cambiar el modelo principal de Conchi:
+
+```bash
+docker exec openclaw openclaw config set --batch-json \
+  '[{"path":"agents.entries.conchi.model","value":"nvidia/nemotron-3.5-lightning-30b-a3b"}]'
+```
+
+En la web selecciona explícitamente Conchi o el observador y después el modelo.
+Cambiar el modelo de una conversación no debe darse por equivalente a cambiar
+el modelo de la automatización diaria.
+
+### Credenciales y verificación
+
+Un alias visible no demuestra acceso a su clave. Ambos agentes necesitan un
+perfil efectivo para cada proveedor. En el homelab se registraron NVIDIA y
+OpenAI en ambos agentes y se comprobó su respuesta desde la web:
+
+```bash
+docker exec -it openclaw openclaw models auth paste-api-key --agent conchi --provider nvidia
+docker exec -it openclaw openclaw models auth paste-api-key --agent conchi --provider openai
+docker exec -it openclaw openclaw models auth paste-api-key --agent homelab-observer --provider nvidia
+docker exec -it openclaw openclaw models auth paste-api-key --agent homelab-observer --provider openai
+```
+
+Usa estos comandos solo para configurar o renovar una clave; introdúcela cuando
+se solicite, nunca como argumento ni en el repositorio. Para Moonshot o Cloudflare,
+comprueba primero los perfiles efectivos antes de añadir credenciales duplicadas.
+
+```bash
+docker exec openclaw openclaw models status --agent conchi --json
+docker exec openclaw openclaw models status --agent homelab-observer --json
+```
+
+En OpenClaw 2026.9.4, `models status --probe` se bloqueó con el Gateway activo.
+El estado sin probe permite revisar la configuración; prueba la respuesta real
+en una conversación nueva de cada agente y proveedor. Después prueba una consulta
+MCP de lectura: un saludo no verifica las herramientas.
+
+### Automatización y mantenimiento
+
+`homelab-health-daily` conserva el agente `homelab-observer`, su horario y entrega.
+No hay que recrear el informe para utilizar Conchi.
+Antes de retirar agentes antiguos, revisa también las tareas con propietario
+implícito, como la promoción de memoria, y asigna su destino explícitamente si
+la versión permite editar esa tarea.
+
+Los heartbeats administrados por OpenClaw no admiten `automations edit --disable`:
+se desactivan en la configuración de su propietario con `heartbeat.every: "0m"`.
+Las revisiones automáticas de skills también pueden depender de configuración
+administrada por el sistema. No amplíes permisos de archivos o shell para
+silenciar sus errores; diagnostica su configuración de origen.
+
+El script `scripts/06-habilitar-mcps-agentes.sh` descubre los agentes existentes.
+Añade Proxmox y Home Assistant a Conchi conservando los demás permisos, y mantiene
+la allowlist restringida del observador, incluida la consulta de TrueNAS.
+No crea agentes ni elimina los antiguos.
 
 Referencias: [gestión de agentes](https://docs.openclaw.ai/cli/agents),
-[configuración de modelos](https://docs.openclaw.ai/gateway/config-agents/models)
-y [proveedor NVIDIA](https://docs.openclaw.ai/providers/nvidia).
+[modelos](https://docs.openclaw.ai/gateway/config-agents/models)
+y [heartbeat](https://docs.openclaw.ai/heartbeat).
 
 ## 14. Dashboard del informe en Home Assistant
 
@@ -610,11 +573,11 @@ de OpenAI:
 docker exec openclaw openclaw config set --batch-json \
   '[{"path":"memory.search.provider","value":"none"}]'
 docker restart openclaw
-docker exec openclaw openclaw memory status --index --agent main
+docker exec openclaw openclaw memory status --index --agent conchi
 docker exec openclaw openclaw memory status --index --agent homelab-observer
 ```
 
-Ejecuta el último comando después de crear el agente del punto 9.
+Ejecuta las comprobaciones después de crear Conchi (punto 13) y el observador (punto 9).
 La comprobación satisfactoria muestra todos los archivos indexados, `Dirty: no`
 y `FTS: ready`. Con `provider: none`, `Vector store: disabled` y
 `No embedding provider available (FTS-only mode)` describen el modo elegido:
