@@ -549,6 +549,13 @@ bash scripts/05-publicar-informe-ha.sh
 La guía incluye la instalación del servicio, el cambio de cinco minutos a una
 hora y la comprobación del temporizador.
 
+Si el informe se genera pero deja de publicarse y `systemctl list-timers --all
+homelab-report-publisher.timer` muestra `NEXT -`, sigue la
+[recuperación del temporizador](docs/dashboard-homeassistant.md#el-temporizador-aparece-con-next-vacío-y-no-publica).
+La solución comprobada añade `OnActiveSec=1min` para iniciar la publicación y
+mantiene `OnUnitActiveSec=1h`. La guía incluye el envío inmediato y la verificación
+del registro. `inactive (dead)` en el servicio, por sí solo, no significa un fallo.
+
 Muestra el informe de Proxmox y logs de Home Assistant, su fecha y avisos de
 antigüedad o de ejecución fallida. Conserva la entrega en la web de OpenClaw y no
 realiza llamadas adicionales al modelo. El despliegue es opcional y debe probarse
