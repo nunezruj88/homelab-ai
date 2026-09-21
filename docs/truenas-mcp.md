@@ -75,7 +75,8 @@ docker exec openclaw openclaw automations run c2c20bac-2f48-4605-b64a-5f7dfd40c7
 bash scripts/05-publicar-informe-ha.sh
 ```
 
-El informe completo tendrá tres secciones: Proxmox, Home Assistant y TrueNAS.
+El informe completo tendrá cuatro secciones: Proxmox, Home Assistant, TrueNAS y Estado general.
+Consulta la [guía de estados y sensores](estado-general.md) para activar el resumen calculado.
 Los dos sensores de tablas existentes mantienen sus delimitadores y nombres.
 No se crea un sensor adicional de TrueNAS. La tarjeta del informe completo
 mostrará la nueva sección después de publicarlo.
@@ -94,3 +95,7 @@ termina esa extracción antes de TrueNAS para evitar mezclar ambas secciones:
 - [Cliente oficial TrueNAS](https://github.com/truenas/api_client/tree/TS-25.10.3).
 - [Pools en la API 25.10](https://api.truenas.com/v25.10/api_methods_pool.query.html).
 - [Alertas en la API 25.10](https://api.truenas.com/v25.10/api_methods_alert.list.html).
+
+Para las tarjetas rápidas de salud, consulta [Estado general](estado-general.md).
+Una tarjeta que extraiga la sección completa de TrueNAS debe terminar antes de
+`## Estado general`; los sensores de tablas existentes conservan sus delimitadores.
