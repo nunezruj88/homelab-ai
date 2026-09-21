@@ -38,3 +38,6 @@ jobs:
 
       - name: Validate summary sensors and section extraction
         run: python integrations/homeassistant/summary-sensors.test.py
+
+      - name: Validate health states and freshness templates
+        run: python integrations/homeassistant/status-sensors.test.py

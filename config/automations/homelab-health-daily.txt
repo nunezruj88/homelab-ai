@@ -1,11 +1,12 @@
 Genera un informe diario de salud del homelab en español usando únicamente herramientas de lectura.
 
 FORMATO OBLIGATORIO
-Devuelve Markdown sin envolver el informe en un bloque de código. Utiliza exactamente tres encabezados de nivel 2, en este orden y escritos literalmente en una línea independiente:
+Devuelve Markdown sin envolver el informe en un bloque de código. Utiliza exactamente cuatro encabezados de nivel 2, en este orden y escritos literalmente en una línea independiente:
 ## Proxmox
 ## Home Assistant
 ## TrueNAS
-Deja una línea en blanco después de cada encabezado. No añadas emojis, numeración ni texto extra a esos tres encabezados. Empieza directamente con ## Proxmox. Usa encabezados de nivel 3 (###) para las subsecciones. No crees otra sección global ni añadas contenido después de finalizar TrueNAS. Incluye las recomendaciones de cada sistema dentro de su propia sección. No incluyas el antiguo Resumen del estado ni un resumen narrativo inicial. Mantén literalmente los encabezados ### Tabla de nodos, ### Estado general, ### Tablas de logs y ### Cobertura del análisis: los sensores los utilizan como delimitadores.
+## Estado general
+Deja una línea en blanco después de cada encabezado. No añadas emojis, numeración ni texto extra a esos cuatro encabezados. Empieza directamente con ## Proxmox. Usa encabezados de nivel 3 (###) para las subsecciones. No crees otra sección global ni añadas contenido después de finalizar Estado general. Incluye las recomendaciones de cada sistema dentro de su propia sección. No incluyas el antiguo Resumen del estado ni un resumen narrativo inicial. Mantén literalmente los encabezados ### Tabla de nodos, ### Estado general, ### Tablas de logs y ### Cobertura del análisis: los sensores los utilizan como delimitadores.
 
 PROXMOX
 Dentro de ## Proxmox incluye:
@@ -51,5 +52,19 @@ Incluye una tabla con pool, estado, capacidad total, espacio usado, espacio libr
 Resume las clases de alertas y su gravedad, separando las descartadas (dismissed) de las no descartadas. La herramienta no devuelve texto libre de las alertas: no inventes mensajes ni causas específicas a partir de la clase.
 ### Cobertura y recomendaciones
 Indica collected_at y los query_errors. Si alerts es null, no afirmes que no hay alertas. Explica si una lista está truncada. No se comprueban directamente SMART, scrubs, snapshots ni replicaciones: no afirmes que los backups son correctos. Si TrueNAS no está disponible o el MCP no está instalado, conserva esta sección y explica que no pudo evaluarse. Propón acciones sin ejecutarlas.
+
+ESTADO GENERAL
+Finaliza con ## Estado general. Presenta una tabla breve de sistema, estado, motivo y cobertura. Incluye Proxmox, Home Assistant, TrueNAS y Homelab. Estados: ok, warning, critical, unknown. Esta tabla web es orientativa; el publicador recalcula el estado para Home Assistant con las reglas descritas abajo.
+Después incluye exactamente un bloque Markdown etiquetado homelab-evidence con JSON válido (sin comentarios) y esta estructura. Sustituye null únicamente por datos verificados en las herramientas de esta ejecución; nunca por valores supuestos:
+```homelab-evidence
+{"schema":1,"proxmox":{"coverage":"missing","source":"","checks":{"nodes_offline":null,"backup_failures":null,"storage_max_percent":null,"cpu_max_percent":null,"ram_max_percent":null}},"homeassistant":{"coverage":"missing","source":"","checks":{"unavailable":null,"errors":null,"warnings":null}},"truenas":{"coverage":"missing","source":"","checks":{"pools_unhealthy":null,"pools_not_online":null,"pool_max_percent":null,"active_critical_alerts":null,"active_warning_alerts":null}}}
+```
+source: nombre de herramienta y ventana temporal/cobertura en texto breve, sin secretos ni contenido de logs. coverage: complete, partial o missing. complete significa todas las comprobaciones enumeradas para ese sistema, no salud absoluta. Usa partial si hay errores de consulta, listas truncadas, inventario parcial o periodo de logs incompleto/desconocido; missing si no hubo datos. Los conteos son enteros no negativos y los porcentajes números 0..100. unavailable es booleano o null; un fallo de autenticación o permisos no prueba indisponibilidad.
+Proxmox: nodos offline confirmados del inventario completo; fallos de backup en las últimas 24 h; máximo uso de almacenamiento, CPU y RAM entre los recursos consultados. Una VM apagada no demuestra un fallo. Si falta una métrica, null.
+Home Assistant: usa una sola fuente de conteos, sin duplicados; marca partial si solo es una muestra o contadores acumulados sin periodo. Errores de logs no demuestran por sí solos una caída del servicio.
+TrueNAS: pools_unhealthy cuenta healthy=false, aunque status=ONLINE. pools_not_online cuenta status diferente de ONLINE. Consulta valores reales del get_health. Alertas: cuenta CRITICAL, ALERT y EMERGENCY no descartadas como críticas; WARNING y ERROR no descartadas como advertencias. dismissed=true no cuenta como alerta activa, pero no anula healthy=false. Si falta healthy en algún pool, no declares cobertura completa. Listas vacías o métricas ausentes no demuestran un sistema sano.
+Reglas: critical si nodos_offline>0, unavailable=true, pools_unhealthy>0, pools_not_online>0 o active_critical_alerts>0. warning si backup_failures>0, almacenamiento/pool>80%, CPU/RAM>90%, errors>0, warnings>0 o active_warning_alerts>0. Si no hay incidencia y faltan datos: unknown. ok solo con cobertura complete y todas las métricas presentes. Con incidencias y cobertura parcial conserva critical/warning e indica la limitación.
+Homelab: critical si algún sistema es critical, después warning si alguno es warning, ok solo si todos son ok; de lo contrario unknown. Indica siempre si algún sistema tiene cobertura parcial.
+No escribas bloques HOMELAB_STATUS_V1: los genera exclusivamente el publicador. Nunca inventes fechas ni decidas que un informe es reciente sin conocer la hora de consulta.
 
 No consultes Grafana. No ejecutes cambios ni borres logs. Omite secretos y datos sensibles. Conserva las cifras verificadas. Si faltan herramientas o datos, indícalo en la sección correspondiente.

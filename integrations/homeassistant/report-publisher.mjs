@@ -16,11 +16,105 @@ export function selectReportRun(history, jobId) {
   return { good, latestStatus: rows[0].status };
 }
 
+
+const HEALTH_SYSTEMS = ['proxmox', 'homeassistant', 'truenas'];
+const HEALTH_CHECKS = {
+  proxmox: {nodes_offline:'count', backup_failures:'count', storage_max_percent:'percent', cpu_max_percent:'percent', ram_max_percent:'percent'},
+  homeassistant: {unavailable:'bool', errors:'count', warnings:'count'},
+  truenas: {pools_unhealthy:'count', pools_not_online:'count', pool_max_percent:'percent', active_critical_alerts:'count', active_warning_alerts:'count'},
+};
+const HEALTH_LABELS = {proxmox:'Proxmox', homeassistant:'Home Assistant', truenas:'TrueNAS', homelab:'Homelab'};
+const HEALTH_START = '<!-- HOMELAB_STATUS_V1\n';
+const HEALTH_END = '\nEND_HOMELAB_STATUS -->';
+
+function healthResult(state, reasons, complete, source) {
+  return {state, reason:reasons.join('; '), coverage:complete ? 'complete' : 'partial',
+    source:source || 'No disponible', provenance:'model_transcribed',
+    recommendation:state === 'ok' ? 'Mantener la supervisión.' :
+      state === 'unknown' ? 'Completar las consultas y generar un informe nuevo.' :
+      'Revisar las incidencias y contrastarlas con la interfaz del sistema.'};
+}
+
+export function evaluateHealth(evidence) {
+  const result = {};
+  for (const system of HEALTH_SYSTEMS) {
+    const row = evidence?.schema === 1 ? evidence?.[system] : null;
+    const values = {};
+    for (const [key, type] of Object.entries(HEALTH_CHECKS[system])) {
+      const v = row?.checks?.[key];
+      values[key] = type === 'bool' ? (typeof v === 'boolean' ? v : null) :
+        (typeof v === 'number' && Number.isFinite(v) && v >= 0 &&
+          (type === 'percent' ? v <= 100 : Number.isSafeInteger(v)) ? v : null);
+    }
+    const source = typeof row?.source === 'string' ? row.source.slice(0, 300) : '';
+    const complete = row?.coverage === 'complete' && source.trim().length > 0
+      && Object.values(values).every(v => v !== null);
+    const critical = [], warning = [];
+    if (system === 'proxmox') {
+      if (values.nodes_offline > 0) critical.push('Nodos offline: ' + values.nodes_offline);
+      if (values.backup_failures > 0) warning.push('Tareas de backup fallidas: ' + values.backup_failures);
+      for (const [key, label, threshold] of [['storage_max_percent','Almacenamiento',80],
+        ['cpu_max_percent','CPU',90],['ram_max_percent','RAM',90]])
+        if (values[key] > threshold) warning.push(label + ': ' + values[key] + '%');
+    }
+    if (system === 'homeassistant') {
+      if (values.unavailable === true) critical.push('Indisponibilidad confirmada de Home Assistant');
+      if (values.errors > 0) warning.push('Errores en la cobertura consultada: ' + values.errors);
+      if (values.warnings > 0) warning.push('Warnings en la cobertura consultada: ' + values.warnings);
+    }
+    if (system === 'truenas') {
+      if (values.pools_unhealthy > 0) critical.push('Pools no saludables: ' + values.pools_unhealthy);
+      if (values.pools_not_online > 0) critical.push('Pools no ONLINE: ' + values.pools_not_online);
+      if (values.active_critical_alerts > 0) critical.push('Alertas críticas no descartadas: ' + values.active_critical_alerts);
+      if (values.active_warning_alerts > 0) warning.push('Alertas no críticas de advertencia: ' + values.active_warning_alerts);
+      if (values.pool_max_percent > 80) warning.push('Uso máximo de pool: ' + values.pool_max_percent + '%');
+    }
+    const state = critical.length ? 'critical' : warning.length ? 'warning' : complete ? 'ok' : 'unknown';
+    const reasons = [...critical, ...warning];
+    if (!complete) reasons.push('Cobertura incompleta o datos no válidos');
+    if (!reasons.length) reasons.push('Sin incidencias en las comprobaciones declaradas');
+    result[system] = healthResult(state, reasons, complete, source);
+  }
+  const rows = Object.values(result);
+  const state = rows.some(r => r.state === 'critical') ? 'critical' :
+    rows.some(r => r.state === 'warning') ? 'warning' :
+    rows.every(r => r.state === 'ok') ? 'ok' : 'unknown';
+  result.homelab = healthResult(state, HEALTH_SYSTEMS.map(s => HEALTH_LABELS[s] + ': ' + result[s].state),
+    rows.every(r => r.coverage === 'complete'), 'Proxmox, Home Assistant y TrueNAS');
+  return result;
+}
+
+export function attachHealth(fullText, generatedAt) {
+  // Legacy reports are preserved; templates render unknown when no status block exists.
+  const matches = [...fullText.matchAll(/^\x60\x60\x60homelab-evidence\r?\n([\s\S]*?)^\x60\x60\x60[ \t]*$/gm)];
+  if (!matches.length && !/^## Estado general[ \t]*$/m.test(fullText) && !fullText.includes('HOMELAB_STATUS_V1')) return fullText;
+  let evidence = null;
+  if (matches.length === 1 && matches[0][1].length <= 12000) {
+    try { evidence = JSON.parse(matches[0][1]); } catch { /* Unknown, never infer from prose. */ }
+  }
+  const statuses = evaluateHealth(evidence);
+  const data = {schema:1, generated_at:generatedAt, systems:statuses};
+  // Never accept a model-authored machine status block.
+  let body = fullText.replace(/<!-- HOMELAB_STATUS_V1\n[\s\S]*?\nEND_HOMELAB_STATUS -->/g, '');
+  body = body.replace(/^\x60\x60\x60homelab-evidence\r?\n[\s\S]*?^\x60\x60\x60[ \t]*$/gm, '');
+  const heading = body.search(/^## Estado general[ \t]*$/m);
+  if (heading >= 0) body = body.slice(0, heading);
+  const cell = text => text.replace(/[|\r\n]/g, ' ');
+  const table = ['## Estado general', '', '| Sistema | Estado | Motivo | Cobertura |',
+    '| --- | --- | --- | --- |', ...[...HEALTH_SYSTEMS,'homelab'].map(s => {
+      const r = statuses[s];
+      return '| ' + HEALTH_LABELS[s] + ' | ' + r.state + ' | ' + cell(r.reason) + ' | ' + r.coverage + ' |';
+    }), '', 'Estado del informe de ' + generatedAt + '; no es monitorización en tiempo real.',
+    'Reglas automáticas sobre datos transcritos por el modelo; contrastar incidencias con las fuentes.',
+    '', HEALTH_START + JSON.stringify(data) + HEALTH_END];
+  return body.trim() + '\n\n' + table.join('\n');
+}
+
 export function buildReport(history, jobId, fullText) {
   const { good, latestStatus } = selectReportRun(history, jobId);
   const timestamp = e => Number(e.ts ?? e.runAtMs);
   if (typeof fullText !== 'string' || !fullText.trim()) throw Error('Falta el informe completo; no se usa summary');
-  const report = fullText.trim();
+  const report = attachHealth(fullText.trim(), new Date(timestamp(good)).toISOString());
   if (Buffer.byteLength(report) > 32768) throw Error('Informe superior a 32 KiB; no se trunca');
   return {
     schema: 1, job_id: jobId,

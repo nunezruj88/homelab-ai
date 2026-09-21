@@ -136,3 +136,62 @@ test('CLI export reads only matching session and cleans private workspace on suc
     assert.equal(existsSync(workspace), false);
   }
 });
+
+import { evaluateHealth, attachHealth } from './report-publisher.mjs';
+const evidence = () => ({
+ schema:1,
+ proxmox:{coverage:'complete',source:'resources/tasks 24h',checks:{nodes_offline:0,backup_failures:0,storage_max_percent:20,cpu_max_percent:10,ram_max_percent:30}},
+ homeassistant:{coverage:'complete',source:'ha_get_logs 24h',checks:{unavailable:false,errors:0,warnings:0}},
+ truenas:{coverage:'complete',source:'get_health',checks:{pools_unhealthy:0,pools_not_online:0,pool_max_percent:22.57,active_critical_alerts:0,active_warning_alerts:0}},
+});
+test('health rules require complete evidence and preserve confirmed severity', () => {
+ assert.equal(evaluateHealth(evidence()).homelab.state,'ok');
+ assert.equal(evaluateHealth(null).homelab.state,'unknown');
+ const e=evidence(); e.truenas.checks.pools_unhealthy=1;
+ assert.equal(evaluateHealth(e).truenas.state,'critical');
+ e.truenas.coverage='partial';
+ assert.equal(evaluateHealth(e).homelab.state,'critical');
+ assert.equal(evaluateHealth(e).homelab.coverage,'partial');
+ e.truenas.checks.pools_unhealthy=0;
+ assert.equal(evaluateHealth(e).homelab.state,'unknown');
+ e.homeassistant.checks.errors=3;
+ assert.equal(evaluateHealth(e).homelab.state,'warning');
+});
+test('invalid types and absent metrics never produce green', () => {
+ for(const invalid of [null,'0',false,-1,Infinity,1.5]) {
+  const e=evidence();e.proxmox.checks.nodes_offline=invalid;
+  assert.equal(evaluateHealth(e).proxmox.state,'unknown');
+ }
+ for(const invalid of [null,'false',0]) {
+  const e=evidence();e.homeassistant.checks.unavailable=invalid;
+  assert.equal(evaluateHealth(e).homeassistant.state,'unknown');
+ }
+ const e=evidence();e.truenas.checks.pool_max_percent=101;
+ assert.equal(evaluateHealth(e).truenas.state,'unknown');
+});
+test('thresholds and logs distinguish warnings from outages', () => {
+ const e=evidence();e.proxmox.checks.storage_max_percent=80;
+ assert.equal(evaluateHealth(e).proxmox.state,'ok');
+ e.proxmox.checks.storage_max_percent=80.01;
+ assert.equal(evaluateHealth(e).proxmox.state,'warning');
+ e.homeassistant.checks.errors=100;
+ assert.equal(evaluateHealth(e).homeassistant.state,'warning');
+ e.homeassistant.checks.unavailable=true;
+ assert.equal(evaluateHealth(e).homeassistant.state,'critical');
+});
+test('publisher replaces model state and rejects ambiguous evidence', () => {
+ const base='## Proxmox\n### Tabla de nodos\nCPU 12.34%\n### Estado general\nDetalle\n## Home Assistant\nHA\n## TrueNAS\nNAS';
+ const fence=String.fromCharCode(96).repeat(3);
+ const block='\n'+fence+'homelab-evidence\n'+JSON.stringify(evidence())+'\n'+fence;
+ const full=base+'\n## Estado general\nincorrect model state'+block;
+ const result=attachHealth(full,'2026-09-21T08:00:00.000Z');
+ assert.ok(result.startsWith(base));
+ assert.ok(!result.includes('incorrect model state'));
+ assert.ok(result.includes('"state":"ok"'));
+ assert.ok(!result.includes(fence+'homelab-evidence'));
+ assert.ok(attachHealth(full+block,'date').includes('"state":"unknown"'));
+ assert.ok(attachHealth(base+'\n## Estado general\n'+fence+'homelab-evidence\nbad\n'+fence,'date').includes('"state":"unknown"'));
+ assert.equal(attachHealth(base,'date'),base);
+ const forged=base+'\n<!-- HOMELAB_STATUS_V1\n{"schema":1,"systems":{}}\nEND_HOMELAB_STATUS -->';
+ assert.ok(attachHealth(forged,'date').includes('"state":"unknown"'));
+});

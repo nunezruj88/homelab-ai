@@ -307,7 +307,7 @@ Referencias: [nodo Sensor](https://zachowj.github.io/node-red-contrib-home-assis
 ## Separar el informe por sistema
 
 El mensaje versionado en `config/automations/homelab-health-daily.txt` exige
-exactamente `## Proxmox`, `## Home Assistant` y `## TrueNAS`, sin emojis en esos encabezados.
+exactamente `## Proxmox`, `## Home Assistant`, `## TrueNAS` y `## Estado general`, sin emojis en esos encabezados.
 La [integración TrueNAS](truenas-mcp.md) es opcional; sin ella se indica cobertura no disponible.
 Las tarjetas de secciones completas deben terminar Home Assistant antes de `## TrueNAS`.
 Cada sección contiene sus propias recomendaciones y subsecciones de nivel 3.
@@ -418,3 +418,7 @@ En los ajustes de cada entidad cambia `sensor.proxmox_summary` a
 `sensor.informe_proxmox_summary` y `sensor.homeassistant_summary` a
 `sensor.informe_homeassistant_summary`. Actualiza también las tarjetas con
 `summary-cards.yaml`. No borres las entidades ni cambies sus unique_id.
+
+Para las tarjetas rápidas de salud, consulta [Estado general](estado-general.md).
+Una tarjeta que extraiga la sección completa de TrueNAS debe terminar antes de
+`## Estado general`; los sensores de tablas existentes conservan sus delimitadores.
