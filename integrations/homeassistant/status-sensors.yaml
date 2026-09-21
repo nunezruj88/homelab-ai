@@ -1,0 +1,350 @@
+-
+  sensor:
+    -
+      name: "informe_proxmox_estado"
+      unique_id: "homelab_proxmox_estado"
+      icon: "mdi:clipboard-pulse"
+      state: |-
+        {% set report = state_attr('sensor.homelab_informe', 'report') or '' %}
+        {% set start = '<!-- HOMELAB_STATUS_V1\n' %}
+        {% set end = '\nEND_HOMELAB_STATUS -->' %}
+        {% set raw = report.split(start, 1)[1].split(end, 1)[0] if start in report and end in report else '{}' %}
+        {% set data = raw | from_json({}) %}
+        {% set data = data if data is mapping else {} %}
+        {% set systems = data.get('systems', {}) %}
+        {% set systems = systems if systems is mapping else {} %}
+        {% set row = systems.get('proxmox', {}) %}
+        {% set row = row if row is mapping else {} %}
+        {% set stamp = as_timestamp(state_attr('sensor.homelab_informe', 'generated_at'), none) %}
+        {% set fresh = stamp is not none and 0 <= as_timestamp(now()) - stamp <= 108000 %}
+        {{ row.get('state', 'unknown') if data.get('schema') == 1 and data.get('generated_at') == state_attr('sensor.homelab_informe', 'generated_at') and fresh and states('sensor.homelab_informe') not in ['unknown', 'unavailable'] and state_attr('sensor.homelab_informe', 'last_run_status') == 'ok' and row.get('state') in ['ok','warning','critical','unknown'] else 'unknown' }}
+      attributes:
+        motivo: |-
+          {% set report = state_attr('sensor.homelab_informe', 'report') or '' %}
+          {% set start = '<!-- HOMELAB_STATUS_V1\n' %}
+          {% set end = '\nEND_HOMELAB_STATUS -->' %}
+          {% set raw = report.split(start, 1)[1].split(end, 1)[0] if start in report and end in report else '{}' %}
+          {% set data = raw | from_json({}) %}
+          {% set data = data if data is mapping else {} %}
+          {% set systems = data.get('systems', {}) %}
+          {% set systems = systems if systems is mapping else {} %}
+          {% set row = systems.get('proxmox', {}) %}
+          {% set row = row if row is mapping else {} %}
+          {{ row.get('reason', 'Sin datos estructurados; genera y publica un informe nuevo.') }}
+        recomendacion: |-
+          {% set report = state_attr('sensor.homelab_informe', 'report') or '' %}
+          {% set start = '<!-- HOMELAB_STATUS_V1\n' %}
+          {% set end = '\nEND_HOMELAB_STATUS -->' %}
+          {% set raw = report.split(start, 1)[1].split(end, 1)[0] if start in report and end in report else '{}' %}
+          {% set data = raw | from_json({}) %}
+          {% set data = data if data is mapping else {} %}
+          {% set systems = data.get('systems', {}) %}
+          {% set systems = systems if systems is mapping else {} %}
+          {% set row = systems.get('proxmox', {}) %}
+          {% set row = row if row is mapping else {} %}
+          {{ row.get('recommendation', 'Comprobar generación y publicación del informe.') }}
+        cobertura: |-
+          {% set report = state_attr('sensor.homelab_informe', 'report') or '' %}
+          {% set start = '<!-- HOMELAB_STATUS_V1\n' %}
+          {% set end = '\nEND_HOMELAB_STATUS -->' %}
+          {% set raw = report.split(start, 1)[1].split(end, 1)[0] if start in report and end in report else '{}' %}
+          {% set data = raw | from_json({}) %}
+          {% set data = data if data is mapping else {} %}
+          {% set systems = data.get('systems', {}) %}
+          {% set systems = systems if systems is mapping else {} %}
+          {% set row = systems.get('proxmox', {}) %}
+          {% set row = row if row is mapping else {} %}
+          {{ row.get('coverage', 'missing') }}
+        fuente: |-
+          {% set report = state_attr('sensor.homelab_informe', 'report') or '' %}
+          {% set start = '<!-- HOMELAB_STATUS_V1\n' %}
+          {% set end = '\nEND_HOMELAB_STATUS -->' %}
+          {% set raw = report.split(start, 1)[1].split(end, 1)[0] if start in report and end in report else '{}' %}
+          {% set data = raw | from_json({}) %}
+          {% set data = data if data is mapping else {} %}
+          {% set systems = data.get('systems', {}) %}
+          {% set systems = systems if systems is mapping else {} %}
+          {% set row = systems.get('proxmox', {}) %}
+          {% set row = row if row is mapping else {} %}
+          {{ row.get('source', 'No disponible') }}
+        procedencia: "datos transcritos por el modelo"
+        estado_del_informe: |-
+          {% set report = state_attr('sensor.homelab_informe', 'report') or '' %}
+          {% set start = '<!-- HOMELAB_STATUS_V1\n' %}
+          {% set end = '\nEND_HOMELAB_STATUS -->' %}
+          {% set raw = report.split(start, 1)[1].split(end, 1)[0] if start in report and end in report else '{}' %}
+          {% set data = raw | from_json({}) %}
+          {% set data = data if data is mapping else {} %}
+          {% set systems = data.get('systems', {}) %}
+          {% set systems = systems if systems is mapping else {} %}
+          {% set row = systems.get('proxmox', {}) %}
+          {% set row = row if row is mapping else {} %}
+          {{ row.get('state', 'unknown') }}
+        vigencia: |-
+          {% set stamp = as_timestamp(state_attr('sensor.homelab_informe', 'generated_at'), none) %}
+          {% set fresh = stamp is not none and 0 <= as_timestamp(now()) - stamp <= 108000 %}
+          {{ 'sin_fecha' if stamp is none else 'fecha_futura' if as_timestamp(now()) < stamp else 'vigente' if fresh else 'caducado' }}
+        generated_at: "{{ state_attr('sensor.homelab_informe', 'generated_at') }}"
+        report_id: "{{ state_attr('sensor.homelab_informe', 'report_id') }}"
+        last_run_status: "{{ state_attr('sensor.homelab_informe', 'last_run_status') }}"
+    -
+      name: "informe_homeassistant_estado"
+      unique_id: "homelab_homeassistant_estado"
+      icon: "mdi:clipboard-pulse"
+      state: |-
+        {% set report = state_attr('sensor.homelab_informe', 'report') or '' %}
+        {% set start = '<!-- HOMELAB_STATUS_V1\n' %}
+        {% set end = '\nEND_HOMELAB_STATUS -->' %}
+        {% set raw = report.split(start, 1)[1].split(end, 1)[0] if start in report and end in report else '{}' %}
+        {% set data = raw | from_json({}) %}
+        {% set data = data if data is mapping else {} %}
+        {% set systems = data.get('systems', {}) %}
+        {% set systems = systems if systems is mapping else {} %}
+        {% set row = systems.get('homeassistant', {}) %}
+        {% set row = row if row is mapping else {} %}
+        {% set stamp = as_timestamp(state_attr('sensor.homelab_informe', 'generated_at'), none) %}
+        {% set fresh = stamp is not none and 0 <= as_timestamp(now()) - stamp <= 108000 %}
+        {{ row.get('state', 'unknown') if data.get('schema') == 1 and data.get('generated_at') == state_attr('sensor.homelab_informe', 'generated_at') and fresh and states('sensor.homelab_informe') not in ['unknown', 'unavailable'] and state_attr('sensor.homelab_informe', 'last_run_status') == 'ok' and row.get('state') in ['ok','warning','critical','unknown'] else 'unknown' }}
+      attributes:
+        motivo: |-
+          {% set report = state_attr('sensor.homelab_informe', 'report') or '' %}
+          {% set start = '<!-- HOMELAB_STATUS_V1\n' %}
+          {% set end = '\nEND_HOMELAB_STATUS -->' %}
+          {% set raw = report.split(start, 1)[1].split(end, 1)[0] if start in report and end in report else '{}' %}
+          {% set data = raw | from_json({}) %}
+          {% set data = data if data is mapping else {} %}
+          {% set systems = data.get('systems', {}) %}
+          {% set systems = systems if systems is mapping else {} %}
+          {% set row = systems.get('homeassistant', {}) %}
+          {% set row = row if row is mapping else {} %}
+          {{ row.get('reason', 'Sin datos estructurados; genera y publica un informe nuevo.') }}
+        recomendacion: |-
+          {% set report = state_attr('sensor.homelab_informe', 'report') or '' %}
+          {% set start = '<!-- HOMELAB_STATUS_V1\n' %}
+          {% set end = '\nEND_HOMELAB_STATUS -->' %}
+          {% set raw = report.split(start, 1)[1].split(end, 1)[0] if start in report and end in report else '{}' %}
+          {% set data = raw | from_json({}) %}
+          {% set data = data if data is mapping else {} %}
+          {% set systems = data.get('systems', {}) %}
+          {% set systems = systems if systems is mapping else {} %}
+          {% set row = systems.get('homeassistant', {}) %}
+          {% set row = row if row is mapping else {} %}
+          {{ row.get('recommendation', 'Comprobar generación y publicación del informe.') }}
+        cobertura: |-
+          {% set report = state_attr('sensor.homelab_informe', 'report') or '' %}
+          {% set start = '<!-- HOMELAB_STATUS_V1\n' %}
+          {% set end = '\nEND_HOMELAB_STATUS -->' %}
+          {% set raw = report.split(start, 1)[1].split(end, 1)[0] if start in report and end in report else '{}' %}
+          {% set data = raw | from_json({}) %}
+          {% set data = data if data is mapping else {} %}
+          {% set systems = data.get('systems', {}) %}
+          {% set systems = systems if systems is mapping else {} %}
+          {% set row = systems.get('homeassistant', {}) %}
+          {% set row = row if row is mapping else {} %}
+          {{ row.get('coverage', 'missing') }}
+        fuente: |-
+          {% set report = state_attr('sensor.homelab_informe', 'report') or '' %}
+          {% set start = '<!-- HOMELAB_STATUS_V1\n' %}
+          {% set end = '\nEND_HOMELAB_STATUS -->' %}
+          {% set raw = report.split(start, 1)[1].split(end, 1)[0] if start in report and end in report else '{}' %}
+          {% set data = raw | from_json({}) %}
+          {% set data = data if data is mapping else {} %}
+          {% set systems = data.get('systems', {}) %}
+          {% set systems = systems if systems is mapping else {} %}
+          {% set row = systems.get('homeassistant', {}) %}
+          {% set row = row if row is mapping else {} %}
+          {{ row.get('source', 'No disponible') }}
+        procedencia: "datos transcritos por el modelo"
+        estado_del_informe: |-
+          {% set report = state_attr('sensor.homelab_informe', 'report') or '' %}
+          {% set start = '<!-- HOMELAB_STATUS_V1\n' %}
+          {% set end = '\nEND_HOMELAB_STATUS -->' %}
+          {% set raw = report.split(start, 1)[1].split(end, 1)[0] if start in report and end in report else '{}' %}
+          {% set data = raw | from_json({}) %}
+          {% set data = data if data is mapping else {} %}
+          {% set systems = data.get('systems', {}) %}
+          {% set systems = systems if systems is mapping else {} %}
+          {% set row = systems.get('homeassistant', {}) %}
+          {% set row = row if row is mapping else {} %}
+          {{ row.get('state', 'unknown') }}
+        vigencia: |-
+          {% set stamp = as_timestamp(state_attr('sensor.homelab_informe', 'generated_at'), none) %}
+          {% set fresh = stamp is not none and 0 <= as_timestamp(now()) - stamp <= 108000 %}
+          {{ 'sin_fecha' if stamp is none else 'fecha_futura' if as_timestamp(now()) < stamp else 'vigente' if fresh else 'caducado' }}
+        generated_at: "{{ state_attr('sensor.homelab_informe', 'generated_at') }}"
+        report_id: "{{ state_attr('sensor.homelab_informe', 'report_id') }}"
+        last_run_status: "{{ state_attr('sensor.homelab_informe', 'last_run_status') }}"
+    -
+      name: "informe_truenas_estado"
+      unique_id: "homelab_truenas_estado"
+      icon: "mdi:clipboard-pulse"
+      state: |-
+        {% set report = state_attr('sensor.homelab_informe', 'report') or '' %}
+        {% set start = '<!-- HOMELAB_STATUS_V1\n' %}
+        {% set end = '\nEND_HOMELAB_STATUS -->' %}
+        {% set raw = report.split(start, 1)[1].split(end, 1)[0] if start in report and end in report else '{}' %}
+        {% set data = raw | from_json({}) %}
+        {% set data = data if data is mapping else {} %}
+        {% set systems = data.get('systems', {}) %}
+        {% set systems = systems if systems is mapping else {} %}
+        {% set row = systems.get('truenas', {}) %}
+        {% set row = row if row is mapping else {} %}
+        {% set stamp = as_timestamp(state_attr('sensor.homelab_informe', 'generated_at'), none) %}
+        {% set fresh = stamp is not none and 0 <= as_timestamp(now()) - stamp <= 108000 %}
+        {{ row.get('state', 'unknown') if data.get('schema') == 1 and data.get('generated_at') == state_attr('sensor.homelab_informe', 'generated_at') and fresh and states('sensor.homelab_informe') not in ['unknown', 'unavailable'] and state_attr('sensor.homelab_informe', 'last_run_status') == 'ok' and row.get('state') in ['ok','warning','critical','unknown'] else 'unknown' }}
+      attributes:
+        motivo: |-
+          {% set report = state_attr('sensor.homelab_informe', 'report') or '' %}
+          {% set start = '<!-- HOMELAB_STATUS_V1\n' %}
+          {% set end = '\nEND_HOMELAB_STATUS -->' %}
+          {% set raw = report.split(start, 1)[1].split(end, 1)[0] if start in report and end in report else '{}' %}
+          {% set data = raw | from_json({}) %}
+          {% set data = data if data is mapping else {} %}
+          {% set systems = data.get('systems', {}) %}
+          {% set systems = systems if systems is mapping else {} %}
+          {% set row = systems.get('truenas', {}) %}
+          {% set row = row if row is mapping else {} %}
+          {{ row.get('reason', 'Sin datos estructurados; genera y publica un informe nuevo.') }}
+        recomendacion: |-
+          {% set report = state_attr('sensor.homelab_informe', 'report') or '' %}
+          {% set start = '<!-- HOMELAB_STATUS_V1\n' %}
+          {% set end = '\nEND_HOMELAB_STATUS -->' %}
+          {% set raw = report.split(start, 1)[1].split(end, 1)[0] if start in report and end in report else '{}' %}
+          {% set data = raw | from_json({}) %}
+          {% set data = data if data is mapping else {} %}
+          {% set systems = data.get('systems', {}) %}
+          {% set systems = systems if systems is mapping else {} %}
+          {% set row = systems.get('truenas', {}) %}
+          {% set row = row if row is mapping else {} %}
+          {{ row.get('recommendation', 'Comprobar generación y publicación del informe.') }}
+        cobertura: |-
+          {% set report = state_attr('sensor.homelab_informe', 'report') or '' %}
+          {% set start = '<!-- HOMELAB_STATUS_V1\n' %}
+          {% set end = '\nEND_HOMELAB_STATUS -->' %}
+          {% set raw = report.split(start, 1)[1].split(end, 1)[0] if start in report and end in report else '{}' %}
+          {% set data = raw | from_json({}) %}
+          {% set data = data if data is mapping else {} %}
+          {% set systems = data.get('systems', {}) %}
+          {% set systems = systems if systems is mapping else {} %}
+          {% set row = systems.get('truenas', {}) %}
+          {% set row = row if row is mapping else {} %}
+          {{ row.get('coverage', 'missing') }}
+        fuente: |-
+          {% set report = state_attr('sensor.homelab_informe', 'report') or '' %}
+          {% set start = '<!-- HOMELAB_STATUS_V1\n' %}
+          {% set end = '\nEND_HOMELAB_STATUS -->' %}
+          {% set raw = report.split(start, 1)[1].split(end, 1)[0] if start in report and end in report else '{}' %}
+          {% set data = raw | from_json({}) %}
+          {% set data = data if data is mapping else {} %}
+          {% set systems = data.get('systems', {}) %}
+          {% set systems = systems if systems is mapping else {} %}
+          {% set row = systems.get('truenas', {}) %}
+          {% set row = row if row is mapping else {} %}
+          {{ row.get('source', 'No disponible') }}
+        procedencia: "datos transcritos por el modelo"
+        estado_del_informe: |-
+          {% set report = state_attr('sensor.homelab_informe', 'report') or '' %}
+          {% set start = '<!-- HOMELAB_STATUS_V1\n' %}
+          {% set end = '\nEND_HOMELAB_STATUS -->' %}
+          {% set raw = report.split(start, 1)[1].split(end, 1)[0] if start in report and end in report else '{}' %}
+          {% set data = raw | from_json({}) %}
+          {% set data = data if data is mapping else {} %}
+          {% set systems = data.get('systems', {}) %}
+          {% set systems = systems if systems is mapping else {} %}
+          {% set row = systems.get('truenas', {}) %}
+          {% set row = row if row is mapping else {} %}
+          {{ row.get('state', 'unknown') }}
+        vigencia: |-
+          {% set stamp = as_timestamp(state_attr('sensor.homelab_informe', 'generated_at'), none) %}
+          {% set fresh = stamp is not none and 0 <= as_timestamp(now()) - stamp <= 108000 %}
+          {{ 'sin_fecha' if stamp is none else 'fecha_futura' if as_timestamp(now()) < stamp else 'vigente' if fresh else 'caducado' }}
+        generated_at: "{{ state_attr('sensor.homelab_informe', 'generated_at') }}"
+        report_id: "{{ state_attr('sensor.homelab_informe', 'report_id') }}"
+        last_run_status: "{{ state_attr('sensor.homelab_informe', 'last_run_status') }}"
+    -
+      name: "informe_homelab_estado"
+      unique_id: "homelab_homelab_estado"
+      icon: "mdi:clipboard-pulse"
+      state: |-
+        {% set report = state_attr('sensor.homelab_informe', 'report') or '' %}
+        {% set start = '<!-- HOMELAB_STATUS_V1\n' %}
+        {% set end = '\nEND_HOMELAB_STATUS -->' %}
+        {% set raw = report.split(start, 1)[1].split(end, 1)[0] if start in report and end in report else '{}' %}
+        {% set data = raw | from_json({}) %}
+        {% set data = data if data is mapping else {} %}
+        {% set systems = data.get('systems', {}) %}
+        {% set systems = systems if systems is mapping else {} %}
+        {% set row = systems.get('homelab', {}) %}
+        {% set row = row if row is mapping else {} %}
+        {% set stamp = as_timestamp(state_attr('sensor.homelab_informe', 'generated_at'), none) %}
+        {% set fresh = stamp is not none and 0 <= as_timestamp(now()) - stamp <= 108000 %}
+        {{ row.get('state', 'unknown') if data.get('schema') == 1 and data.get('generated_at') == state_attr('sensor.homelab_informe', 'generated_at') and fresh and states('sensor.homelab_informe') not in ['unknown', 'unavailable'] and state_attr('sensor.homelab_informe', 'last_run_status') == 'ok' and row.get('state') in ['ok','warning','critical','unknown'] else 'unknown' }}
+      attributes:
+        motivo: |-
+          {% set report = state_attr('sensor.homelab_informe', 'report') or '' %}
+          {% set start = '<!-- HOMELAB_STATUS_V1\n' %}
+          {% set end = '\nEND_HOMELAB_STATUS -->' %}
+          {% set raw = report.split(start, 1)[1].split(end, 1)[0] if start in report and end in report else '{}' %}
+          {% set data = raw | from_json({}) %}
+          {% set data = data if data is mapping else {} %}
+          {% set systems = data.get('systems', {}) %}
+          {% set systems = systems if systems is mapping else {} %}
+          {% set row = systems.get('homelab', {}) %}
+          {% set row = row if row is mapping else {} %}
+          {{ row.get('reason', 'Sin datos estructurados; genera y publica un informe nuevo.') }}
+        recomendacion: |-
+          {% set report = state_attr('sensor.homelab_informe', 'report') or '' %}
+          {% set start = '<!-- HOMELAB_STATUS_V1\n' %}
+          {% set end = '\nEND_HOMELAB_STATUS -->' %}
+          {% set raw = report.split(start, 1)[1].split(end, 1)[0] if start in report and end in report else '{}' %}
+          {% set data = raw | from_json({}) %}
+          {% set data = data if data is mapping else {} %}
+          {% set systems = data.get('systems', {}) %}
+          {% set systems = systems if systems is mapping else {} %}
+          {% set row = systems.get('homelab', {}) %}
+          {% set row = row if row is mapping else {} %}
+          {{ row.get('recommendation', 'Comprobar generación y publicación del informe.') }}
+        cobertura: |-
+          {% set report = state_attr('sensor.homelab_informe', 'report') or '' %}
+          {% set start = '<!-- HOMELAB_STATUS_V1\n' %}
+          {% set end = '\nEND_HOMELAB_STATUS -->' %}
+          {% set raw = report.split(start, 1)[1].split(end, 1)[0] if start in report and end in report else '{}' %}
+          {% set data = raw | from_json({}) %}
+          {% set data = data if data is mapping else {} %}
+          {% set systems = data.get('systems', {}) %}
+          {% set systems = systems if systems is mapping else {} %}
+          {% set row = systems.get('homelab', {}) %}
+          {% set row = row if row is mapping else {} %}
+          {{ row.get('coverage', 'missing') }}
+        fuente: |-
+          {% set report = state_attr('sensor.homelab_informe', 'report') or '' %}
+          {% set start = '<!-- HOMELAB_STATUS_V1\n' %}
+          {% set end = '\nEND_HOMELAB_STATUS -->' %}
+          {% set raw = report.split(start, 1)[1].split(end, 1)[0] if start in report and end in report else '{}' %}
+          {% set data = raw | from_json({}) %}
+          {% set data = data if data is mapping else {} %}
+          {% set systems = data.get('systems', {}) %}
+          {% set systems = systems if systems is mapping else {} %}
+          {% set row = systems.get('homelab', {}) %}
+          {% set row = row if row is mapping else {} %}
+          {{ row.get('source', 'No disponible') }}
+        procedencia: "datos transcritos por el modelo"
+        estado_del_informe: |-
+          {% set report = state_attr('sensor.homelab_informe', 'report') or '' %}
+          {% set start = '<!-- HOMELAB_STATUS_V1\n' %}
+          {% set end = '\nEND_HOMELAB_STATUS -->' %}
+          {% set raw = report.split(start, 1)[1].split(end, 1)[0] if start in report and end in report else '{}' %}
+          {% set data = raw | from_json({}) %}
+          {% set data = data if data is mapping else {} %}
+          {% set systems = data.get('systems', {}) %}
+          {% set systems = systems if systems is mapping else {} %}
+          {% set row = systems.get('homelab', {}) %}
+          {% set row = row if row is mapping else {} %}
+          {{ row.get('state', 'unknown') }}
+        vigencia: |-
+          {% set stamp = as_timestamp(state_attr('sensor.homelab_informe', 'generated_at'), none) %}
+          {% set fresh = stamp is not none and 0 <= as_timestamp(now()) - stamp <= 108000 %}
+          {{ 'sin_fecha' if stamp is none else 'fecha_futura' if as_timestamp(now()) < stamp else 'vigente' if fresh else 'caducado' }}
+        generated_at: "{{ state_attr('sensor.homelab_informe', 'generated_at') }}"
+        report_id: "{{ state_attr('sensor.homelab_informe', 'report_id') }}"
+        last_run_status: "{{ state_attr('sensor.homelab_informe', 'last_run_status') }}"

@@ -525,6 +525,16 @@ realiza llamadas adicionales al modelo. El despliegue es opcional y debe probars
 manualmente antes de activar el temporizador. No requiere volver a ejecutar el
 script 04 ni modificar la base de datos de OpenClaw.
 
+### Estado general y tarjetas rápidas
+
+La [guía de Estado general](docs/estado-general.md) añade cuatro sensores de estado
+para Proxmox, Home Assistant, TrueNAS y el conjunto del homelab. El publicador
+aplica reglas fijas sobre datos estructurados transcritos por el modelo; no es
+una comprobación independiente de las API. Las tarjetas muestran motivo,
+cobertura, fecha y vigencia. A las 30 horas el estado pasa a unknown.
+Incluye la actualización del mensaje del informe y las plantillas de Home
+Assistant; no requiere cambiar el flujo de Node-RED.
+
 ## 15. Retirar Grafana MCP de instalaciones existentes
 
 Grafana MCP ya no se despliega ni se registra con estos scripts. Para quitarlo

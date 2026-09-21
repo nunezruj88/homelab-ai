@@ -1,0 +1,75 @@
+type: "vertical-stack"
+cards:
+  -
+    type: "markdown"
+    content: |-
+      ## Estado general
+      Estado del último informe. Caduca a las 30 horas; no es monitorización en tiempo real.
+  -
+    type: "markdown"
+    title: "Homelab"
+    content: |-
+      {% set e = 'sensor.informe_homelab_estado' %}
+      {% set labels = {'ok':'🟢 Correcto','warning':'🟠 Atención','critical':'🔴 Crítico','unknown':'⚪ Desconocido','unavailable':'⚪ No disponible'} %}
+      **{{ labels.get(states(e), '⚪ Desconocido') }}**
+      
+      {{ state_attr(e, 'motivo') or 'Esperando informe.' }}
+      
+      **Acción:** {{ state_attr(e, 'recomendacion') or 'Revisar la publicación.' }}
+      
+      **Fecha:** {{ state_attr(e, 'generated_at') or 'Sin fecha' }} · **Vigencia:** {{ state_attr(e, 'vigencia') or 'Sin datos' }}
+      
+      **Cobertura:** {{ state_attr(e, 'cobertura') or 'Sin datos' }} · **Última ejecución:** {{ state_attr(e, 'last_run_status') or 'Sin datos' }}
+      
+      {% if states(e) == 'unknown' %}El motivo describe el informe disponible; revisa su fecha y el resultado de la última ejecución.{% endif %}
+  -
+    type: "markdown"
+    title: "Proxmox"
+    content: |-
+      {% set e = 'sensor.informe_proxmox_estado' %}
+      {% set labels = {'ok':'🟢 Correcto','warning':'🟠 Atención','critical':'🔴 Crítico','unknown':'⚪ Desconocido','unavailable':'⚪ No disponible'} %}
+      **{{ labels.get(states(e), '⚪ Desconocido') }}**
+      
+      {{ state_attr(e, 'motivo') or 'Esperando informe.' }}
+      
+      **Acción:** {{ state_attr(e, 'recomendacion') or 'Revisar la publicación.' }}
+      
+      **Fecha:** {{ state_attr(e, 'generated_at') or 'Sin fecha' }} · **Vigencia:** {{ state_attr(e, 'vigencia') or 'Sin datos' }}
+      
+      **Cobertura:** {{ state_attr(e, 'cobertura') or 'Sin datos' }} · **Última ejecución:** {{ state_attr(e, 'last_run_status') or 'Sin datos' }}
+      
+      {% if states(e) == 'unknown' %}El motivo describe el informe disponible; revisa su fecha y el resultado de la última ejecución.{% endif %}
+  -
+    type: "markdown"
+    title: "Home Assistant"
+    content: |-
+      {% set e = 'sensor.informe_homeassistant_estado' %}
+      {% set labels = {'ok':'🟢 Correcto','warning':'🟠 Atención','critical':'🔴 Crítico','unknown':'⚪ Desconocido','unavailable':'⚪ No disponible'} %}
+      **{{ labels.get(states(e), '⚪ Desconocido') }}**
+      
+      {{ state_attr(e, 'motivo') or 'Esperando informe.' }}
+      
+      **Acción:** {{ state_attr(e, 'recomendacion') or 'Revisar la publicación.' }}
+      
+      **Fecha:** {{ state_attr(e, 'generated_at') or 'Sin fecha' }} · **Vigencia:** {{ state_attr(e, 'vigencia') or 'Sin datos' }}
+      
+      **Cobertura:** {{ state_attr(e, 'cobertura') or 'Sin datos' }} · **Última ejecución:** {{ state_attr(e, 'last_run_status') or 'Sin datos' }}
+      
+      {% if states(e) == 'unknown' %}El motivo describe el informe disponible; revisa su fecha y el resultado de la última ejecución.{% endif %}
+  -
+    type: "markdown"
+    title: "TrueNAS"
+    content: |-
+      {% set e = 'sensor.informe_truenas_estado' %}
+      {% set labels = {'ok':'🟢 Correcto','warning':'🟠 Atención','critical':'🔴 Crítico','unknown':'⚪ Desconocido','unavailable':'⚪ No disponible'} %}
+      **{{ labels.get(states(e), '⚪ Desconocido') }}**
+      
+      {{ state_attr(e, 'motivo') or 'Esperando informe.' }}
+      
+      **Acción:** {{ state_attr(e, 'recomendacion') or 'Revisar la publicación.' }}
+      
+      **Fecha:** {{ state_attr(e, 'generated_at') or 'Sin fecha' }} · **Vigencia:** {{ state_attr(e, 'vigencia') or 'Sin datos' }}
+      
+      **Cobertura:** {{ state_attr(e, 'cobertura') or 'Sin datos' }} · **Última ejecución:** {{ state_attr(e, 'last_run_status') or 'Sin datos' }}
+      
+      {% if states(e) == 'unknown' %}El motivo describe el informe disponible; revisa su fecha y el resultado de la última ejecución.{% endif %}
