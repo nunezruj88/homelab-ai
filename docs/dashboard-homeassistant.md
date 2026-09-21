@@ -157,10 +157,9 @@ systemctl list-timers --all homelab-report-publisher.timer
 Si todavía no existen el servicio y el temporizador, sigue la instalación completa
 del apartado anterior. La generación diaria de OpenClaw no instala estas unidades.
 
-Si ya aplicaste un override con `OnUnitActiveSec=1h`, puedes conservarlo.
-Ese override tiene prioridad sobre el archivo del repositorio; si también vacía
-`OnBootSec`, no incluye el intento inicial a los dos minutos. Comprueba la
-configuración combinada con:
+Un override tiene prioridad sobre el archivo del repositorio. Si conserva solo
+`OnUnitActiveSec=1h` y elimina el disparo inicial, puede quedarse sin próxima
+ejecución. Comprueba la configuración combinada con:
 
 ```bash
 systemctl cat homelab-report-publisher.timer
@@ -173,6 +172,47 @@ otro informe ni cambia su fecha. Para forzar una publicación inmediata:
 cd /root/homelab-ai
 bash scripts/05-publicar-informe-ha.sh
 ```
+
+### El temporizador aparece con NEXT vacío y no publica
+
+Si `list-timers` muestra `NEXT -`, el servicio está inactivo y no hay entradas
+recientes en el registro, comprueba el temporizador antes de investigar Node-RED.
+En el homelab se recuperó la publicación añadiendo un primer disparo explícito
+y conservando la repetición cada hora.
+
+Este bloque sustituye el override de programación de este publicador. Si contiene
+otros ajustes propios, consérvalos antes de sustituirlo:
+
+```bash
+mkdir -p /etc/systemd/system/homelab-report-publisher.timer.d
+
+cat > /etc/systemd/system/homelab-report-publisher.timer.d/override.conf <<'EOF'
+[Timer]
+OnCalendar=
+OnBootSec=
+OnActiveSec=
+OnUnitActiveSec=
+OnUnitInactiveSec=
+OnActiveSec=1min
+OnUnitActiveSec=1h
+EOF
+
+systemctl daemon-reload
+systemctl enable homelab-report-publisher.timer
+systemctl restart homelab-report-publisher.timer
+systemctl start homelab-report-publisher.service
+
+systemctl list-timers --all homelab-report-publisher.timer
+journalctl -u homelab-report-publisher.service \
+  --since "10 minutes ago" -n 60 --no-pager
+```
+
+`OnActiveSec=1min` programa un intento un minuto después de activar el temporizador;
+`OnUnitActiveSec=1h` mantiene los intentos cada hora. El arranque manual del servicio
+publica inmediatamente y puede ir seguido del intento inicial al minuto.
+Verifica que aparece una fecha en `NEXT` y que el registro confirma el envío.
+Un servicio de tipo oneshot puede volver a `inactive (dead)` después de terminar
+correctamente: ese estado por sí solo no indica un fallo.
 
 ## Diagnóstico y límites
 
