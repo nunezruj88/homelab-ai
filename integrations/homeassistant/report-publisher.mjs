@@ -1,7 +1,4 @@
 import { execFileSync } from 'node:child_process';
-import { mkdtempSync, readFileSync, rmSync, statSync } from 'node:fs';
-import { tmpdir } from 'node:os';
-import { join, resolve } from 'node:path';
 
 export function selectReportRun(history, jobId) {
   const entries = Array.isArray(history) ? history : history?.entries;
@@ -87,7 +84,7 @@ export function evaluateHealth(evidence) {
 
 export function assertUsableReport(text) {
   if (/\[(?:Malformed|Oversized) diagnostic JSON redacted\]/i.test(text))
-    throw Error('OpenClaw redactó el informe exportado; no se publica ni se reemplaza el sensor. Actualiza el mensaje de la automatización y genera un informe nuevo.');
+    throw Error('El historial de OpenClaw contiene un marcador de redacción; no se publica ni se reemplaza el sensor. Revisa la respuesta en la web y la versión de OpenClaw.');
 }
 
 // Flat typed evidence avoids embedding diagnostic JSON in the model response.
@@ -181,25 +178,34 @@ export function resolveReportSession(list, run, agentId) {
   return matches[0].key;
 }
 
-export function extractReport(events, run) {
-  const start = Number(run.runAtMs);
-  const end = Number(run.ts);
+export function extractChatReport(history, run, key) {
+  if (history?.sessionId !== run.sessionId || history?.sessionKey !== key
+      || !Array.isArray(history?.messages))
+    throw Error('El historial del Gateway no corresponde a la sesión solicitada; se conserva el sensor');
+  const start = Number(run.runAtMs), end = Number(run.ts);
   if (!Number.isFinite(start) || !Number.isFinite(end) || start <= 0 || end < start)
     throw Error('Faltan las fechas de la ejecución para identificar el informe');
-  const candidates = events.filter(e => {
-    const m = e?.data?.message;
-    const ts = Date.parse(e?.ts);
-    return e?.sessionId === run.sessionId && e.type === 'assistant.message'
-      && m?.role === 'assistant' && m.stopReason === 'stop'
-      && ts >= start && ts <= end;
-  }).sort((a, b) => Date.parse(a.ts) - Date.parse(b.ts));
-  const message = candidates.at(-1)?.data.message;
-  // Only public text blocks, never thinking, tool results or runtime snapshots.
-  const text = Array.isArray(message?.content)
-    ? message.content.filter(b => b.type === 'text' && typeof b.text === 'string')
+  const candidates = history.messages.filter(m =>
+    m?.role === 'assistant' && m.stopReason === 'stop'
+    && typeof m.timestamp === 'number' && Number.isFinite(m.timestamp)
+    && m.timestamp >= start && m.timestamp <= end
+    // Announce/injected copies are not the generated final response.
+    && !m.senderSession && !m.idempotencyKey && !m.provenance
+  ).sort((a,b) => a.timestamp - b.timestamp);
+  const message = candidates.at(-1);
+  if (!message)
+    throw Error('No hay respuesta final de esta ejecución en chat.history; se conserva el sensor');
+  if (candidates.length > 1 && candidates.at(-2).timestamp === message.timestamp)
+    throw Error('Hay respuestas finales ambiguas; se conserva el sensor');
+  if (message.__openclaw?.truncated === true || message.truncated === true
+      || (Array.isArray(message.content) && message.content.some(b => b?.truncated === true || b?.__openclaw?.truncated === true)))
+    throw Error('El Gateway devuelve una respuesta truncada; se conserva el sensor');
+  const text = Array.isArray(message.content)
+    ? message.content.filter(b => b?.type === 'text' && typeof b.text === 'string')
       .map(b => b.text).join('\n\n').trim()
-    : typeof message?.content === 'string' ? message.content.trim() : '';
-  if (!text) throw Error('No hay respuesta final completa para esa ejecución; se conserva el sensor');
+    : typeof message.content === 'string' ? message.content.trim() : '';
+  if (!text || /\[chat\.history omitted:/i.test(text))
+    throw Error('Falta el informe completo en chat.history; se conserva el sensor');
   assertUsableReport(text);
   return text;
 }
@@ -214,24 +220,11 @@ function cli(args) {
 export function readFullReport(run, agentId, call = cli) {
   const list = call(['sessions', 'list', '--agent', agentId, '--limit', 'all', '--json']);
   const key = resolveReportSession(list, run, agentId);
-  // Unique private workspace; exports are transient and never enter the repo.
-  const workspace = mkdtempSync(join(tmpdir(), 'homelab-report-'));
-  try {
-    const bundle = call(['sessions', 'export-trajectory', '--agent', agentId,
-      '--session-key', key, '--workspace', workspace, '--output', 'report', '--json']);
-    const expected = join(workspace, '.openclaw', 'trajectory-exports', 'report');
-    if (bundle.sessionId !== run.sessionId || typeof bundle.outputDir !== 'string'
-      || resolve(bundle.outputDir) !== resolve(expected))
-      throw Error('La exportación no corresponde a la sesión o directorio solicitado');
-    const file = join(expected, 'events.jsonl');
-    if (statSync(file).size > 32 * 1024 * 1024) throw Error('Exportación superior a 32 MiB');
-    const events = readFileSync(file, 'utf8').split('\n').filter(l => l.trim())
-      .map(l => JSON.parse(l));
-    return extractReport(events, run);
-  } finally {
-    // Delete only the directory created by this invocation, not the returned path.
-    rmSync(workspace, { recursive: true, force: true });
-  }
+  // Same authenticated, read-only history surface used by the web UI.
+  // Do not use diagnostic exports or unredacted database reads.
+  const history = call(['gateway', 'call', 'chat.history', '--json', '--params',
+    JSON.stringify({agentId, sessionKey:key, limit:100, maxChars:65536})]);
+  return extractChatReport(history, run, key);
 }
 
 export async function publishReport(payload, { url, token }) {
@@ -262,13 +255,13 @@ if (process.env.HOMELAB_PUBLISH_RUN === '1') {
       token: process.env.HOMELAB_REPORT_TOKEN,
     });
     console.log(JSON.stringify({ published: true, generated_at: payload.generated_at,
-      last_run_status: payload.last_run_status, report_source: 'trajectory',
+      last_run_status: payload.last_run_status, report_source: 'chat.history',
       report_chars: payload.report.length }));
   } catch (error) {
     // Child process errors may contain full stdout/stderr, including reports.
-    console.error(error?.spawnargs ? 'No se pudo consultar o exportar la sesión de OpenClaw' :
+    console.error(error?.spawnargs ? 'No se pudo consultar el historial del Gateway de OpenClaw' :
       error instanceof SyntaxError ? 'Respuesta JSON no válida' :
-      error?.code ? 'No se pudo leer o limpiar la exportación temporal' :
+      error?.code ? 'No se pudo consultar el informe de OpenClaw' :
       String(error.message).replace(/Bearer\s+\S+/gi, 'Bearer [redacted]'));
     process.exitCode = 1;
   }
