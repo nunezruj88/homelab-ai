@@ -1,10 +1,9 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import http from 'node:http';
-import { readFileSync, mkdirSync, writeFileSync, existsSync } from 'node:fs';
+import { readFileSync } from 'node:fs';
 import vm from 'node:vm';
-import { join } from 'node:path';
-import { buildReport, publishReport, extractReport, readFullReport, resolveReportSession } from './report-publisher.mjs';
+import { buildReport, publishReport, extractChatReport, readFullReport, resolveReportSession } from './report-publisher.mjs';
 
 const job = 'c2c20bac-2f48-4605-b64a-5f7dfd40c743';
 const token = 'a'.repeat(64);
@@ -76,36 +75,6 @@ test('flow only updates the dedicated sensor and returns success downstream of i
     assert.ok(flow.some(other => other.id === id));
 });
 
-const finalEvent = (text, overrides = {}) => ({
-  type: 'assistant.message', sessionId: good.sessionId,
-  ts: new Date(time - 1000).toISOString(),
-  data: { message: { role: 'assistant', stopReason: 'stop',
-    content: [{ type: 'thinking', thinking: 'private reasoning' },
-      { type: 'text', text }] } }, ...overrides,
-});
-
-test('full trajectory preserves HA section beyond summary and excludes other events/runs', () => {
-  const full = '## Proxmox\n' + 'CPU 12.34%\n'.repeat(300)
-    + '\n## Home Assistant\nErrores categorizados\n## Acciones\nRevisar integración.';
-  const events = [
-    finalEvent('wrong session', { sessionId: 'other' }),
-    finalEvent('old report', { ts: new Date(good.runAtMs - 1).toISOString() }),
-    { type: 'model.completed', data: { assistantTexts: ['runtime text'] } },
-    finalEvent(full),
-    finalEvent('future report', { ts: new Date(good.ts + 1).toISOString() }),
-  ];
-  const text = extractReport(events, good);
-  assert.equal(text, full);
-  const payload = buildReport({ entries: [{ ...good, summary: full.slice(0, 2000) + '…' }] }, job, text);
-  assert.equal(invoke(payload)[0].report.report, full);
-  assert.ok(!payload.report.includes('private reasoning'));
-  assert.throws(() => extractReport([], good));
-  assert.throws(() => extractReport(events, { ...good, runAtMs: undefined }));
-  assert.throws(() => extractReport([finalEvent('tool', { data: {
-    message: { role: 'assistant', stopReason: 'toolUse', content: [{type:'text',text:'tool'}] }
-  } })], good));
-});
-
 test('resolve actual session key by sessionId instead of cron run alias', () => {
   const key = 'agent:homelab-observer:cron:' + job;
   const list = { sessions: [{ sessionId: good.sessionId, key }] };
@@ -113,28 +82,6 @@ test('resolve actual session key by sessionId instead of cron run alias', () => 
     'homelab-observer'), key);
   assert.throws(() => resolveReportSession({ sessions: [] }, good, 'homelab-observer'));
   assert.throws(() => resolveReportSession(list, good, 'main'));
-});
-
-test('CLI export reads only matching session and cleans private workspace on success/failure', () => {
-  for (const mode of ['ok', 'wrong-session', 'broken-json', 'export-failed', 'wrong-path']) {
-    let workspace;
-    const call = args => {
-      if (args[1] === 'list') return { sessions: [{
-        sessionId: good.sessionId, key: 'agent:homelab-observer:cron:' + job }] };
-      workspace = args[args.indexOf('--workspace') + 1];
-      assert.equal(args[args.indexOf('--session-key') + 1], 'agent:homelab-observer:cron:' + job);
-      if (mode === 'export-failed') throw Error('Export failed');
-      const outputDir = join(workspace, '.openclaw', 'trajectory-exports', 'report');
-      mkdirSync(outputDir, { recursive: true });
-      writeFileSync(join(outputDir, 'events.jsonl'), mode === 'broken-json'
-        ? 'invalid' : JSON.stringify(finalEvent(good.summary)) + '\n');
-      return { outputDir: mode === 'wrong-path' ? workspace : outputDir,
-        sessionId: mode === 'wrong-session' ? 'other' : good.sessionId };
-    };
-    if (mode === 'ok') assert.equal(readFullReport(good, 'homelab-observer', call), good.summary);
-    else assert.throws(() => readFullReport(good, 'homelab-observer', call));
-    assert.equal(existsSync(workspace), false);
-  }
 });
 
 import { evaluateHealth, attachHealth } from './report-publisher.mjs';
@@ -207,8 +154,8 @@ const flatEvidence = value => Object.entries(value).filter(([k]) => k !== 'schem
 test('redaction placeholders never replace the report or become health evidence', () => {
   for (const marker of ['[Malformed diagnostic JSON redacted]', '[Oversized diagnostic JSON redacted]']) {
     for (const text of [marker, '## Proxmox\n'+marker+'\n## Estado general\nok']) {
-      assert.throws(() => buildReport({entries:[good]},job,text), /redactó/);
-      assert.throws(() => extractReport([finalEvent(text)],good), /redactó/);
+      assert.throws(() => buildReport({entries:[good]},job,text), /redacción/);
+      assert.throws(() => extractChatReport(chat([finalMessage(text)]),good,sessionKey), /redacción/);
     }
   }
 });
@@ -245,4 +192,55 @@ test('flat evidence rejects ambiguous fields and malformed values without granti
   assert.equal(evaluateHealth(parseFlatEvidence('proxmox.nodes_offline=0')).homelab.state,'unknown');
   const partial=valid.replace('nodes_offline=0','nodes_offline=null');
   assert.equal(evaluateHealth(parseFlatEvidence(partial)).proxmox.state,'unknown');
+});
+
+
+const sessionKey='agent:homelab-observer:cron:'+job;
+const finalMessage=(text, changes={})=>({
+  role:'assistant',stopReason:'stop',timestamp:good.ts-1000,
+  content:[{type:'thinking',thinking:'private reasoning'},{type:'text',text}],
+  ...changes,
+});
+const chat=(messages, changes={})=>({sessionId:good.sessionId,sessionKey,messages,...changes});
+test('chat history selects final generated response, excluding announces and other runs',()=>{
+  const text='## Proxmox\nCPU 12.34%\n## Home Assistant\nLogs\n## TrueNAS\nvault';
+  const page=chat([
+    finalMessage('old',{timestamp:good.runAtMs-1}),
+    finalMessage('announce',{stopReason:undefined,provenance:{kind:'inter_session'}}),
+    finalMessage('tools',{stopReason:'toolUse'}),
+    finalMessage(text),
+    finalMessage('announce later',{timestamp:good.ts,idempotencyKey:'delivery'}),
+    finalMessage('future',{timestamp:good.ts+1}),
+    finalMessage('tool result',{role:'tool'}),
+  ]);
+  assert.equal(extractChatReport(page,good,sessionKey),text);
+  assert.ok(!extractChatReport(page,good,sessionKey).includes('private reasoning'));
+  assert.equal(buildReport({entries:[good]},job,extractChatReport(page,good,sessionKey)).report,text);
+});
+test('chat history fails closed for mismatches, ambiguous finals, missing dates and truncation',()=>{
+  const m=finalMessage('report');
+  for(const page of [
+    chat([m],{sessionId:'other'}),chat([m],{sessionKey:'other'}),chat([]),
+    chat([m,{...m}]),
+    chat([finalMessage('truncated',{__openclaw:{truncated:true,reason:'display-cap'}})]),
+    chat([finalMessage('[chat.history omitted: message too large]')]),
+    chat([finalMessage('report',{timestamp:String(good.ts-1000)})]),
+    chat([finalMessage('',{content:[{type:'thinking',thinking:'secret'}]})]),
+  ]) assert.throws(()=>extractChatReport(page,good,sessionKey));
+  assert.throws(()=>extractChatReport(chat([m]),{...good,runAtMs:undefined},sessionKey));
+  // Never fall back to an earlier good message if the actual final was truncated.
+  assert.throws(()=>extractChatReport(chat([m,finalMessage('cut',{timestamp:good.ts,__openclaw:{truncated:true}})]),good,sessionKey));
+});
+test('readFullReport uses gateway auth/history with exact session and no export',()=>{
+  const calls=[];
+  const call=args=>{
+    calls.push(args);
+    if(args[0]==='sessions')return {sessions:[{sessionId:good.sessionId,key:sessionKey}]};
+    assert.deepEqual(args.slice(0,5),['gateway','call','chat.history','--json','--params']);
+    assert.deepEqual(JSON.parse(args[5]),{agentId:'homelab-observer',sessionKey,limit:100,maxChars:65536});
+    return chat([finalMessage('full report')],{hasMore:true});
+  };
+  assert.equal(readFullReport(good,'homelab-observer',call),'full report');
+  assert.equal(calls.length,2);
+  assert.ok(!calls.flat().includes('export-trajectory'));
 });

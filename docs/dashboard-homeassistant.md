@@ -256,14 +256,14 @@ con puntos suspensivos antes de las secciones finales. El nuevo publicador:
 
 - Busca la sesión del agente `homelab-observer` por el `sessionId` de la ejecución.
   Usa su clave real aunque el historial devuelva una clave con sufijo `:run:…`.
-- Exporta la sesión mediante `sessions export-trajectory --json`.
-- Selecciona el último evento `assistant.message` con `stopReason: stop`,
-  de esa sesión y dentro del intervalo entre `runAtMs` y `ts`.
-- Envía solo sus bloques de texto, con la redacción que aplique el exportador.
-  No publica razonamiento, resultados de herramientas ni eventos internos.
-- Borra su exportación temporal al terminar, también si falla. No toca otras
-  exportaciones ni las bases de datos. Si no puede identificar el informe, falla
-  y conserva el sensor anterior; nunca usa el resumen recortado como alternativa.
+- Lee `gateway call chat.history`, la superficie autenticada de historial del Gateway.
+- Verifica que sessionId y sessionKey coincidan con la ejecución seleccionada.
+- Selecciona el último mensaje assistant con stopReason stop y timestamp dentro
+  del intervalo entre runAtMs y ts; excluye copias anunciadas o inyectadas.
+- Envía solo sus bloques públicos de texto. No publica razonamiento ni resultados
+  de herramientas. Rechaza respuestas truncadas, ambiguas o redactadas.
+- No crea exportaciones temporales ni lee directamente bases de datos. Si no puede
+  identificar el informe, falla y conserva el sensor; nunca utiliza summary como alternativa.
 
 Para actualizar una instalación existente:
 
@@ -273,15 +273,17 @@ git pull --ff-only
 bash scripts/05-publicar-informe-ha.sh
 ```
 
-La salida debe incluir `published: true`, `report_source: "trajectory"` y
+La salida debe incluir `published: true`, `report_source: "chat.history"` y
 `report_chars`. Comprueba que el panel incluye Home Assistant y las recomendaciones.
 No necesitas regenerar el informe, reiniciar OpenClaw, reimportar Node-RED ni
 cambiar el YAML. El temporizador utiliza automáticamente el código actualizado.
 La fecha del informe se conserva aunque ahora se publique el contenido completo.
 
-La exportación necesita espacio temporal dentro del contenedor. Un archivo de
-eventos superior a 32 MiB se rechaza. Si el identificador de la ejecución ya no
-está entre las sesiones guardadas, no se usa una conversación distinta.
+El Gateway debe estar activo y la CLI debe poder autenticarse con su configuración.
+La consulta solicita los últimos 100 mensajes con un límite de texto de 65536
+caracteres, superior al límite de publicación de 32 KiB. Si la respuesta final no
+está en esa página o la sesión ya no corresponde a la ejecución, se conserva el
+sensor. No se intenta publicar una conversación distinta ni una respuesta anterior.
 
 ## Validación
 
@@ -294,7 +296,7 @@ node --test integrations/homeassistant/report-publisher.test.mjs
 Verifican selección del último informe, cifras y saltos de línea, autenticación,
 límites, rechazo de IDs ajenos, errores HTTP y confirmación de publicación.
 También cubren resumen truncado, texto completo con logs HA, resolución de sesión,
-exclusión de otras ejecuciones y limpieza de las exportaciones temporales.
+exclusión de otras ejecuciones, copias anunciadas, respuestas truncadas y marcadores de redacción.
 No sustituyen la prueba real de importación con tu versión de Node-RED, Companion
 y Home Assistant; esa validación queda pendiente del despliegue.
 
