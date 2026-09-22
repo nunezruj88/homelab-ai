@@ -55,16 +55,35 @@ Indica collected_at y los query_errors. Si alerts es null, no afirmes que no hay
 
 ESTADO GENERAL
 Finaliza con ## Estado general. Presenta una tabla breve de sistema, estado, motivo y cobertura. Incluye Proxmox, Home Assistant, TrueNAS y Homelab. Estados: ok, warning, critical, unknown. Esta tabla web es orientativa; el publicador recalcula el estado para Home Assistant con las reglas descritas abajo.
-Después incluye exactamente un bloque Markdown etiquetado homelab-evidence con JSON válido (sin comentarios) y esta estructura. Sustituye null únicamente por datos verificados en las herramientas de esta ejecución; nunca por valores supuestos:
-```homelab-evidence
-{"schema":1,"proxmox":{"coverage":"missing","source":"","checks":{"nodes_offline":null,"backup_failures":null,"storage_max_percent":null,"cpu_max_percent":null,"ram_max_percent":null}},"homeassistant":{"coverage":"missing","source":"","checks":{"unavailable":null,"errors":null,"warnings":null}},"truenas":{"coverage":"missing","source":"","checks":{"pools_unhealthy":null,"pools_not_online":null,"pool_max_percent":null,"active_critical_alerts":null,"active_warning_alerts":null}}}
+Después incluye exactamente un bloque Markdown etiquetado homelab-evidence-v2, con una línea clave=valor por dato. No uses JSON, llaves, corchetes, comillas, listas ni comentarios en ese bloque. Usa punto decimal. Sustituye null únicamente por datos verificados en las herramientas de esta ejecución; nunca por valores supuestos:
+```homelab-evidence-v2
+proxmox.coverage=missing
+proxmox.source=No disponible
+proxmox.nodes_offline=null
+proxmox.backup_failures=null
+proxmox.storage_max_percent=null
+proxmox.cpu_max_percent=null
+proxmox.ram_max_percent=null
+homeassistant.coverage=missing
+homeassistant.source=No disponible
+homeassistant.unavailable=null
+homeassistant.errors=null
+homeassistant.warnings=null
+truenas.coverage=missing
+truenas.source=No disponible
+truenas.pools_unhealthy=null
+truenas.pools_not_online=null
+truenas.pool_max_percent=null
+truenas.active_critical_alerts=null
+truenas.active_warning_alerts=null
 ```
-source: nombre de herramienta y ventana temporal/cobertura en texto breve, sin secretos ni contenido de logs. coverage: complete, partial o missing. complete significa todas las comprobaciones enumeradas para ese sistema, no salud absoluta. Usa partial si hay errores de consulta, listas truncadas, inventario parcial o periodo de logs incompleto/desconocido; missing si no hubo datos. Los conteos son enteros no negativos y los porcentajes números 0..100. unavailable es booleano o null; un fallo de autenticación o permisos no prueba indisponibilidad.
+
+source: una línea de texto sin llaves ni corchetes, con nombre de herramienta y ventana temporal/cobertura en texto breve, sin secretos ni contenido de logs. coverage: complete, partial o missing. complete significa todas las comprobaciones enumeradas para ese sistema, no salud absoluta. Usa partial si hay errores de consulta, listas truncadas, inventario parcial o periodo de logs incompleto/desconocido; missing si no hubo datos. Los conteos son enteros no negativos y los porcentajes números 0..100. unavailable es booleano o null; un fallo de autenticación o permisos no prueba indisponibilidad.
 Proxmox: nodos offline confirmados del inventario completo; fallos de backup en las últimas 24 h; máximo uso de almacenamiento, CPU y RAM entre los recursos consultados. Una VM apagada no demuestra un fallo. Si falta una métrica, null.
 Home Assistant: usa una sola fuente de conteos, sin duplicados; marca partial si solo es una muestra o contadores acumulados sin periodo. Errores de logs no demuestran por sí solos una caída del servicio.
 TrueNAS: pools_unhealthy cuenta healthy=false, aunque status=ONLINE. pools_not_online cuenta status diferente de ONLINE. Consulta valores reales del get_health. Alertas: cuenta CRITICAL, ALERT y EMERGENCY no descartadas como críticas; WARNING y ERROR no descartadas como advertencias. dismissed=true no cuenta como alerta activa, pero no anula healthy=false. Si falta healthy en algún pool, no declares cobertura completa. Listas vacías o métricas ausentes no demuestran un sistema sano.
 Reglas: critical si nodos_offline>0, unavailable=true, pools_unhealthy>0, pools_not_online>0 o active_critical_alerts>0. warning si backup_failures>0, almacenamiento/pool>80%, CPU/RAM>90%, errors>0, warnings>0 o active_warning_alerts>0. Si no hay incidencia y faltan datos: unknown. ok solo con cobertura complete y todas las métricas presentes. Con incidencias y cobertura parcial conserva critical/warning e indica la limitación.
 Homelab: critical si algún sistema es critical, después warning si alguno es warning, ok solo si todos son ok; de lo contrario unknown. Indica siempre si algún sistema tiene cobertura parcial.
-No escribas bloques HOMELAB_STATUS_V1: los genera exclusivamente el publicador. Nunca inventes fechas ni decidas que un informe es reciente sin conocer la hora de consulta.
+No copies JSON de herramientas ni fragmentos crudos de logs al informe. Resume los mensajes en texto y tablas, sin secretos. No escribas bloques HOMELAB_STATUS_V1: los genera exclusivamente el publicador. Nunca inventes fechas ni decidas que un informe es reciente sin conocer la hora de consulta.
 
 No consultes Grafana. No ejecutes cambios ni borres logs. Omite secretos y datos sensibles. Conserva las cifras verificadas. Si faltan herramientas o datos, indícalo en la sección correspondiente.

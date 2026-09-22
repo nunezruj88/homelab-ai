@@ -84,19 +84,64 @@ export function evaluateHealth(evidence) {
   return result;
 }
 
+
+export function assertUsableReport(text) {
+  if (/\[(?:Malformed|Oversized) diagnostic JSON redacted\]/i.test(text))
+    throw Error('OpenClaw redactó el informe exportado; no se publica ni se reemplaza el sensor. Actualiza el mensaje de la automatización y genera un informe nuevo.');
+}
+
+// Flat typed evidence avoids embedding diagnostic JSON in the model response.
+// JSON is still produced locally after the redacted export, never sent through it.
+export function parseFlatEvidence(text) {
+  if (text.length > 12000) return null;
+  const result = {schema:1};
+  for (const system of HEALTH_SYSTEMS) result[system] = {checks:{}};
+  const seen = new Set();
+  for (const raw of text.split(/\r?\n/)) {
+    const line = raw.trim();
+    if (!line) continue;
+    const m = /^(proxmox|homeassistant|truenas)\.([a-z_]+)\s*=\s*(.*)$/.exec(line);
+    if (!m || seen.has(m[1] + '.' + m[2])) return null;
+    const [, system, field, value] = m;
+    seen.add(system + '.' + field);
+    if (field === 'coverage') {
+      if (!['complete','partial','missing'].includes(value)) return null;
+      result[system].coverage = value;
+    } else if (field === 'source') {
+      if (value.length > 300 || /[{}\[\]]/.test(value)) return null;
+      result[system].source = value;
+    } else {
+      if (!Object.hasOwn(HEALTH_CHECKS[system], field)) return null;
+      let parsed = null;
+      if (value === 'null') parsed = null;
+      else if (HEALTH_CHECKS[system][field] === 'bool') {
+        if (!['true','false'].includes(value)) return null;
+        parsed = value === 'true';
+      } else {
+        if (!/^(?:0|[1-9]\d*)(?:\.\d+)?$/.test(value)) return null;
+        parsed = Number(value);
+        if (!Number.isFinite(parsed)) return null;
+      }
+      result[system].checks[field] = parsed;
+    }
+  }
+  return seen.size ? result : null;
+}
+
 export function attachHealth(fullText, generatedAt) {
+  assertUsableReport(fullText);
   // Legacy reports are preserved; templates render unknown when no status block exists.
-  const matches = [...fullText.matchAll(/^\x60\x60\x60homelab-evidence\r?\n([\s\S]*?)^\x60\x60\x60[ \t]*$/gm)];
+  const matches = [...fullText.matchAll(/^\x60\x60\x60homelab-evidence(-v2)?\r?\n([\s\S]*?)^\x60\x60\x60[ \t]*$/gm)];
   if (!matches.length && !/^## Estado general[ \t]*$/m.test(fullText) && !fullText.includes('HOMELAB_STATUS_V1')) return fullText;
   let evidence = null;
-  if (matches.length === 1 && matches[0][1].length <= 12000) {
-    try { evidence = JSON.parse(matches[0][1]); } catch { /* Unknown, never infer from prose. */ }
+  if (matches.length === 1 && matches[0][2].length <= 12000) {
+    try { evidence = matches[0][1] === '-v2' ? parseFlatEvidence(matches[0][2]) : JSON.parse(matches[0][2]); } catch { /* Unknown, never infer from prose. */ }
   }
   const statuses = evaluateHealth(evidence);
   const data = {schema:1, generated_at:generatedAt, systems:statuses};
   // Never accept a model-authored machine status block.
   let body = fullText.replace(/<!-- HOMELAB_STATUS_V1\n[\s\S]*?\nEND_HOMELAB_STATUS -->/g, '');
-  body = body.replace(/^\x60\x60\x60homelab-evidence\r?\n[\s\S]*?^\x60\x60\x60[ \t]*$/gm, '');
+  body = body.replace(/^\x60\x60\x60homelab-evidence(?:-v2)?\r?\n[\s\S]*?^\x60\x60\x60[ \t]*$/gm, '');
   const heading = body.search(/^## Estado general[ \t]*$/m);
   if (heading >= 0) body = body.slice(0, heading);
   const cell = text => text.replace(/[|\r\n]/g, ' ');
@@ -155,6 +200,7 @@ export function extractReport(events, run) {
       .map(b => b.text).join('\n\n').trim()
     : typeof message?.content === 'string' ? message.content.trim() : '';
   if (!text) throw Error('No hay respuesta final completa para esa ejecución; se conserva el sensor');
+  assertUsableReport(text);
   return text;
 }
 

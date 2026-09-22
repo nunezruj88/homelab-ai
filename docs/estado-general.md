@@ -15,7 +15,7 @@ histórica y deben leerse junto a vigencia. No es monitorización en tiempo real
 
 ## Cómo se calcula
 
-El modelo transcribe los datos consultados en un bloque `homelab-evidence`.
+El modelo transcribe los datos consultados en un bloque `homelab-evidence-v2` de líneas clave=valor, sin JSON.
 El publicador valida tipos y aplica reglas fijas; no interpreta adjetivos del texto
 ni acepta un color elegido por el modelo. La transcripción sigue dependiendo del
 modelo: no es una verificación independiente contra las API. source identifica
@@ -107,3 +107,34 @@ esa extracción antes de `\n## Estado general` para no mezclar ambas secciones.
 
 El publicador mantiene el límite de 32 KiB para el informe completo, incluida
 la sección calculada; si se supera, falla sin truncar ni reemplazar el sensor.
+
+## Informe sustituido por un marcador de redacción
+
+Si report contiene `[Malformed diagnostic JSON redacted]` o
+`[Oversized diagnostic JSON redacted]`, no es el contenido del informe:
+OpenClaw lo ha sustituido durante algún paso de redacción. Que la ejecución
+figure como ok no garantiza que la exportación conserve la respuesta completa.
+
+El publicador rechaza esos marcadores, incluso dentro de un informe parcial,
+y termina con error antes del POST. Conserva el sensor existente y no utiliza
+summary, razonamiento ni resultados de herramientas como sustituto.
+Si el sensor ya contenía el marcador, el rechazo no recupera su contenido previo.
+
+Actualiza el repositorio, aplica otra vez el mensaje de la automatización con
+los comandos del apartado 1, genera una ejecución nueva y publícala.
+Reenviar la misma ejecución redactada no reconstruye el texto perdido.
+El nuevo bloque de evidencia usa líneas clave=valor para evitar JSON dentro
+de la respuesta del modelo. El parser acepta los informes JSON anteriores si
+la exportación los conserva intactos. Las reglas y las plantillas no cambian.
+
+No desactives el filtro de secretos. Si la nueva ejecución también se redacta,
+comprueba si la respuesta web contiene el informe completo o el mismo marcador,
+y registra la versión de OpenClaw. Eso permite localizar si la sustitución
+ocurre al generar la respuesta o al exportarla. No publiques archivos de
+trayectoria completos sin revisar sus datos sensibles.
+
+La causa exacta del fragmento redactado requiere esa comprobación en el LXC;
+el marcador por sí solo no demuestra que el JSON de evidencia fuera el único
+desencadenante.
+
+Referencia: [filtro de redacción de OpenClaw](https://github.com/openclaw/openclaw/blob/main/packages/ai/src/utils/credential-redaction.ts).

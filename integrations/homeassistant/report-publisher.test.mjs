@@ -195,3 +195,54 @@ test('publisher replaces model state and rejects ambiguous evidence', () => {
  const forged=base+'\n<!-- HOMELAB_STATUS_V1\n{"schema":1,"systems":{}}\nEND_HOMELAB_STATUS -->';
  assert.ok(attachHealth(forged,'date').includes('"state":"unknown"'));
 });
+
+import { parseFlatEvidence } from './report-publisher.mjs';
+
+const flatEvidence = value => Object.entries(value).filter(([k]) => k !== 'schema')
+  .flatMap(([system, row]) => [
+    system+'.coverage='+row.coverage, system+'.source='+row.source,
+    ...Object.entries(row.checks).map(([key,v]) => system+'.'+key+'='+String(v))
+  ]).join('\n');
+
+test('redaction placeholders never replace the report or become health evidence', () => {
+  for (const marker of ['[Malformed diagnostic JSON redacted]', '[Oversized diagnostic JSON redacted]']) {
+    for (const text of [marker, '## Proxmox\n'+marker+'\n## Estado general\nok']) {
+      assert.throws(() => buildReport({entries:[good]},job,text), /redactó/);
+      assert.throws(() => extractReport([finalEvent(text)],good), /redactó/);
+    }
+  }
+});
+
+test('flat evidence preserves typed metrics and produces existing HA status format', () => {
+  const e=evidence();
+  e.truenas.checks.pools_unhealthy=1;
+  const flat=flatEvidence(e);
+  assert.deepEqual(parseFlatEvidence(flat),e);
+  assert.deepEqual(parseFlatEvidence(flat.replaceAll('\n','\r\n')),e);
+  const fence=String.fromCharCode(96).repeat(3);
+  const report='## Proxmox\nCPU 12.34%\n## Home Assistant\nLogs\n## TrueNAS\nvault\n## Estado general\n'
+    +fence+'homelab-evidence-v2\n'+flat+'\n'+fence;
+  const result=buildReport({entries:[good]},job,report);
+  assert.ok(result.report.includes('CPU 12.34%'));
+  assert.ok(result.report.includes('HOMELAB_STATUS_V1'));
+  assert.ok(!result.report.includes('homelab-evidence-v2'));
+  assert.ok(result.report.includes('"state":"critical"'));
+  assert.equal(invoke(result)[0].report.report,result.report);
+});
+
+test('flat evidence rejects ambiguous fields and malformed values without granting green', () => {
+  const valid=flatEvidence(evidence());
+  for (const text of [
+    valid+'\nproxmox.nodes_offline=0',
+    valid+'\nproxmox.not_a_check=0',
+    valid.replace('nodes_offline=0','nodes_offline=NaN'),
+    valid.replace('unavailable=false','unavailable=0'),
+    valid.replace('coverage=complete','coverage=yes'),
+    valid.replace('nodes_offline=0','nodes_offline="0"'),
+    valid.replace('source=resources/tasks 24h','source={"data":"x"}'),
+    '', 'x'.repeat(12001)
+  ]) assert.equal(parseFlatEvidence(text),null);
+  assert.equal(evaluateHealth(parseFlatEvidence('proxmox.nodes_offline=0')).homelab.state,'unknown');
+  const partial=valid.replace('nodes_offline=0','nodes_offline=null');
+  assert.equal(evaluateHealth(parseFlatEvidence(partial)).proxmox.state,'unknown');
+});
