@@ -499,6 +499,11 @@ para Node-RED en `10.8.1.28`, un panel YAML y un publicador que consulta el últ
 informe existente cada hora. Reutiliza la conexión de Node-RED a Home
 Assistant y requiere Node-RED Companion para crear el sensor.
 
+La publicación completa mediante `chat.history` quedó comprobada en el homelab
+el 22 de septiembre de 2026. Esta lectura sustituye la exportación de diagnóstico,
+que podía devolver `[Malformed diagnostic JSON redacted]` aunque el informe se
+viera bien en la web. El publicador rechaza marcadores y respuestas truncadas.
+
 La generación diaria y la publicación son independientes: hay que instalar y
 activar `homelab-report-publisher.timer` en el LXC. Cada hora vuelve a enviar el
 último informe, aunque ya se haya publicado; conserva su fecha y no vuelve a

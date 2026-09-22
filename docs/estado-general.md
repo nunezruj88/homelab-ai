@@ -137,7 +137,10 @@ Los marcadores Malformed/Oversized siguen rechazándose antes del POST. También
 se rechazan respuestas truncadas, sesiones ajenas y candidatos ambiguos. Si la
 consulta no devuelve el informe, se conserva el sensor y se comunica el error;
 no se usa el resumen recortado ni una copia anunciada como sustituto.
-La lectura real por esta vía se comprobó con el diagnóstico del homelab; la
-publicación completa debe verificarse después de actualizar el script.
+La publicación completa mediante chat.history quedó confirmada por el operador
+en Home Assistant el 22 de septiembre de 2026, después de actualizar el publicador.
+No fue necesario regenerar el informe ni modificar Node-RED o las plantillas.
+Esta confirmación corresponde al envío del informe; no sustituye la comprobación
+de cada sensor de estado, sus reglas y su caducidad en una instalación nueva.
 
 Referencia: [historial del Gateway](https://github.com/openclaw/openclaw/blob/main/src/gateway/server-methods/chat-history-handler.ts).
