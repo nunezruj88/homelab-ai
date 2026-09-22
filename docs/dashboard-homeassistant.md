@@ -297,8 +297,10 @@ Verifican selección del último informe, cifras y saltos de línea, autenticaci
 límites, rechazo de IDs ajenos, errores HTTP y confirmación de publicación.
 También cubren resumen truncado, texto completo con logs HA, resolución de sesión,
 exclusión de otras ejecuciones, copias anunciadas, respuestas truncadas y marcadores de redacción.
-No sustituyen la prueba real de importación con tu versión de Node-RED, Companion
-y Home Assistant; esa validación queda pendiente del despliegue.
+La publicación del informe completo por chat.history en Home Assistant quedó
+confirmada por el operador el 22 de septiembre de 2026. En instalaciones nuevas,
+comprueba igualmente la conexión de Node-RED, Companion y las entidades del panel;
+las pruebas automatizadas no sustituyen esa validación local.
 
 Referencias: [nodo Sensor](https://zachowj.github.io/node-red-contrib-home-assistant-websocket/node/sensor.html),
 [Node-RED Companion](https://github.com/zachowj/hass-node-red),
